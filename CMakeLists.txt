@@ -3,6 +3,12 @@ project(prototype CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Only Debug packages are installed via Conan; map other configs to Debug so
+# imported targets resolve correctly and CMP0111 warnings are silenced.
+set(CMAKE_MAP_IMPORTED_CONFIG_RELEASE Debug)
+set(CMAKE_MAP_IMPORTED_CONFIG_MINSIZEREL Debug)
+set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO Debug)
+
 # ---------------------------------------------------------------------------
 # Dependencies (via Conan)
 # ---------------------------------------------------------------------------
@@ -29,8 +35,9 @@ add_library(imgui
     ${IMGUI_DIR}/imgui_demo.cpp
     ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
     ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+    ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp   # ImGui::InputText(std::string&) helper
 )
-target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends)
+target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends ${IMGUI_DIR}/misc/cpp)
 target_link_libraries(imgui PUBLIC glfw OpenGL::GL)
 # Suppress macOS OpenGL deprecation warnings (Apple deprecated GL in 10.14 but it still works)
 if(APPLE)

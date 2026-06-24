@@ -1,7 +1,7 @@
 # lsp
+.vscode/*
 !.vscode/settings.json
 !.vscode/launch.json
-.vscode/
 .vs/
 .cache/
 
@@ -64,3 +64,6 @@ CMakeUserPresets.json
 
 # imgui
 imgui.ini
+
+# claude
+.claude

@@ -1,0 +1,23 @@
+{
+    "AppConfig": {
+        "appName": "MyApp",
+        "fullscreen": false,
+        "logLevel": "info",
+        "targetFps": 60.0,
+        "uiFontPath": "resources/font/ComicMonoNF-Regular.ttf",
+        "uiFontSize": 35.310001373291016,
+        "windowHeight": 1250,
+        "windowWidth": 2063
+    },
+    "RenderSettings": {
+        "clearColor": [
+            0.7845036387443542,
+            0.2678329646587372,
+            0.2678329646587372,
+            1.0
+        ],
+        "maxLights": -36,
+        "shadowQuality": "medium",
+        "wireframe": true
+    }
+}

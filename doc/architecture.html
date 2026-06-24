@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prototype - Application Architecture</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 2rem; }
+  h1 { text-align: center; margin-bottom: 0.5rem; color: #00d4ff; }
+  .subtitle { text-align: center; color: #888; margin-bottom: 2rem; }
+  .diagram { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; max-width: 900px; margin: 0 auto; }
+  .layer { width: 100%; border: 1px solid #333; border-radius: 8px; padding: 1rem; background: #16213e; }
+  .layer-title { font-weight: 700; color: #00d4ff; margin-bottom: 0.75rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; }
+  .boxes { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; }
+  .box { border: 1px solid #444; border-radius: 6px; padding: 0.75rem 1rem; background: #0f3460; min-width: 140px; text-align: center; }
+  .box .name { font-weight: 600; font-size: 0.95rem; color: #fff; }
+  .box .desc { font-size: 0.75rem; color: #aaa; margin-top: 4px; }
+  .arrow { text-align: center; color: #555; font-size: 1.5rem; }
+  .connections { max-width: 900px; margin: 2rem auto 0; padding: 1.5rem; background: #16213e; border-radius: 8px; border: 1px solid #333; }
+  .connections h2 { color: #00d4ff; font-size: 0.9rem; text-transform: uppercase; margin-bottom: 1rem; }
+  .connections ul { list-style: none; padding-left: 0; }
+  .connections li { margin-bottom: 0.5rem; font-size: 0.85rem; color: #ccc; padding-left: 1rem; border-left: 2px solid #0f3460; }
+  .connections li code { background: #0f3460; padding: 2px 5px; border-radius: 3px; color: #00d4ff; font-size: 0.8rem; }
+  .files { max-width: 900px; margin: 1.5rem auto 0; padding: 1.5rem; background: #16213e; border-radius: 8px; border: 1px solid #333; }
+  .files h2 { color: #00d4ff; font-size: 0.9rem; text-transform: uppercase; margin-bottom: 1rem; }
+  .files table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .files th { text-align: left; color: #888; padding: 0.4rem; border-bottom: 1px solid #333; }
+  .files td { padding: 0.4rem; border-bottom: 1px solid #222; }
+  .files td code { color: #00d4ff; }
+</style>
+</head>
+<body>
+
+<h1>Prototype — Application Architecture</h1>
+<p class="subtitle">Minimal C++ framework: Settings + Data Ports + Logging + ImGui Debug Window</p>
+
+<div class="diagram">
+
+  <!-- Application Layer -->
+  <div class="layer">
+    <div class="layer-title">Application Layer (Executables)</div>
+    <div class="boxes">
+      <div class="box">
+        <div class="name">app</div>
+        <div class="desc">ImGui window<br>Main loop + debug panels</div>
+      </div>
+      <div class="box">
+        <div class="name">cli_server</div>
+        <div class="desc">Telnet CLI<br>Settings inspector</div>
+      </div>
+      <div class="box">
+        <div class="name">tests</div>
+        <div class="desc">GTest<br>Unit tests</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">▼</div>
+
+  <!-- Core Systems Layer -->
+  <div class="layer">
+    <div class="layer-title">Core Systems (Header-only)</div>
+    <div class="boxes">
+      <div class="box">
+        <div class="name">Settings System</div>
+        <div class="desc">SettingsRegistry (singleton)<br>SettingsItem&lt;T&gt;<br>DirtyTracker<br>CommandRegistry (CLI)</div>
+      </div>
+      <div class="box">
+        <div class="name">Data Ports</div>
+        <div class="desc">Mempool&lt;T&gt; (ring buffer)<br>SenderPort&lt;T&gt; (fan-out)<br>ReceiverPort&lt;T&gt; (poll)</div>
+      </div>
+      <div class="box">
+        <div class="name">Logging</div>
+        <div class="desc">Log (spdlog wrapper)<br>Per-module named loggers<br>ImGuiLogSink (in-app panel)<br>ANSI auto-detect</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">▼</div>
+
+  <!-- External Dependencies Layer -->
+  <div class="layer">
+    <div class="layer-title">External Dependencies</div>
+    <div class="boxes">
+      <div class="box">
+        <div class="name">Dear ImGui</div>
+        <div class="desc">Immediate-mode GUI<br>OpenGL3 + GLFW backend</div>
+      </div>
+      <div class="box">
+        <div class="name">GLFW</div>
+        <div class="desc">Window creation<br>Input handling</div>
+      </div>
+      <div class="box">
+        <div class="name">nlohmann_json</div>
+        <div class="desc">JSON serialization<br>Settings persistence</div>
+      </div>
+      <div class="box">
+        <div class="name">cli + asio</div>
+        <div class="desc">Telnet server<br>CLI framework</div>
+      </div>
+      <div class="box">
+        <div class="name">GTest</div>
+        <div class="desc">Unit testing</div>
+      </div>
+      <div class="box">
+        <div class="name">spdlog</div>
+        <div class="desc">Logging backend<br>ANSI colors + file sink</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Data Flow -->
+<div class="connections">
+  <h2>Data Flow</h2>
+  <ul>
+    <li><code>Background Thread</code> → <code>SenderPort::reserve()</code> → write data → <code>SenderPort::deliver()</code> → fans out to all connected receivers</li>
+    <li><code>Main Loop (top)</code> → <code>ReceiverPort::update()</code> — promotes pending slot to active (zero-copy)</li>
+    <li><code>Main Loop (render)</code> → <code>ReceiverPort::getData()</code> — read active slot, display in ImGui</li>
+    <li><code>Main Loop (bottom)</code> → <code>ReceiverPort::cleanup()</code> — clears newData flag</li>
+    <li><code>SettingsRegistry::loadJson()</code> → deserializes JSON into registered <code>SettingsItem&lt;T&gt;</code> objects → triggers <code>DirtyTracker::dirty()</code></li>
+    <li><code>SettingsRegistry::saveJson()</code> → serializes all items back to JSON file on exit</li>
+    <li><code>Log::init(level, file)</code> → creates console sink (ANSI auto-detect) + file sink + sets level from <code>AppConfig::logLevel</code></li>
+    <li><code>Log::get("name")</code> → returns a named logger that outputs to all sinks (console, file, ImGui panel)</li>
+    <li><code>ImGuiLogSink::draw()</code> → renders scrollable, color-coded, filterable log panel each frame</li>
+  </ul>
+</div>
+
+<!-- File Map -->
+<div class="files">
+  <h2>File Map</h2>
+  <table>
+    <tr><th>Path</th><th>Role</th></tr>
+    <tr><td><code>app/main.cpp</code></td><td>GLFW window + ImGui init + main loop + data port demo</td></tr>
+    <tr><td><code>app/cli_server.cpp</code></td><td>Telnet CLI settings server</td></tr>
+    <tr><td><code>include/settings/settings_registry.hpp</code></td><td>Singleton registry: load/save JSON, get/set typed values</td></tr>
+    <tr><td><code>include/settings/settings_item.hpp</code></td><td>Auto-registering typed settings wrapper</td></tr>
+    <tr><td><code>include/settings/dirty_tracker.hpp</code></td><td>Change-detection mixin base class</td></tr>
+    <tr><td><code>include/settings/command_registry.hpp</code></td><td>CLI menu builder (list/get/set/export commands)</td></tr>
+    <tr><td><code>include/settings/examples/</code></td><td>AppConfig, RenderSettings, NetworkConfig structs</td></tr>
+    <tr><td><code>include/core/dc/data_container.hpp</code></td><td>Mempool, SenderPort, ReceiverPort (zero-copy threading)</td></tr>
+    <tr><td><code>include/core/dc/interface/</code></td><td>Port payload types (the producer/consumer data contract, namespace dc)</td></tr>
+    <tr><td><code>include/core/log.hpp</code></td><td>Logging module: init, per-module loggers, runtime level control</td></tr>
+    <tr><td><code>include/core/imgui_log_sink.hpp</code></td><td>spdlog sink rendering colored log entries in an ImGui panel</td></tr>
+    <tr><td><code>test/test_data_container.cpp</code></td><td>Unit tests for data ports</td></tr>
+    <tr><td><code>test/test_settings.cpp</code></td><td>Unit tests for settings system</td></tr>
+    <tr><td><code>resources/settings.json</code></td><td>Default runtime configuration</td></tr>
+    <tr><td><code>external/imgui/</code></td><td>Dear ImGui source (submodule)</td></tr>
+  </table>
+</div>
+
+</body>
+</html>
