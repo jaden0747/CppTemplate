@@ -21,27 +21,28 @@ find_package(asio CONFIG REQUIRED)
 find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
 find_package(spdlog REQUIRED)
+find_package(imgui REQUIRED CONFIG)
 
 # ---------------------------------------------------------------------------
-# Dear ImGui (from submodule in external/imgui)
-# Uses built-in imgl3w OpenGL loader — no external GLAD needed.
+# Dear ImGui (docking branch, via Conan)
+# The conan-center recipe only compiles imgui core into imgui::imgui; backend
+# (imgui_impl_*) and misc/cpp (imgui_stdlib) sources ship as package resources
+# under res/bindings and res/misc/cpp — CMakeDeps has no generated variable for
+# them, so we reach into the package folder directly. Only Debug is installed
+# (see CMAKE_MAP_IMPORTED_CONFIG_* above), so the _DEBUG suffix is fixed.
 # ---------------------------------------------------------------------------
-set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui)
-add_library(imgui
-    ${IMGUI_DIR}/imgui.cpp
-    ${IMGUI_DIR}/imgui_draw.cpp
-    ${IMGUI_DIR}/imgui_tables.cpp
-    ${IMGUI_DIR}/imgui_widgets.cpp
-    ${IMGUI_DIR}/imgui_demo.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
-    ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp   # ImGui::InputText(std::string&) helper
+set(IMGUI_BACKENDS_DIR ${imgui_PACKAGE_FOLDER_DEBUG}/res/bindings)
+set(IMGUI_MISC_CPP_DIR ${imgui_PACKAGE_FOLDER_DEBUG}/res/misc/cpp)
+add_library(imgui_backends
+    ${IMGUI_BACKENDS_DIR}/imgui_impl_glfw.cpp
+    ${IMGUI_BACKENDS_DIR}/imgui_impl_opengl3.cpp
+    ${IMGUI_MISC_CPP_DIR}/imgui_stdlib.cpp   # ImGui::InputText(std::string&) helper
 )
-target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends ${IMGUI_DIR}/misc/cpp)
-target_link_libraries(imgui PUBLIC glfw OpenGL::GL)
+target_include_directories(imgui_backends PUBLIC ${IMGUI_BACKENDS_DIR} ${IMGUI_MISC_CPP_DIR})
+target_link_libraries(imgui_backends PUBLIC imgui::imgui glfw OpenGL::GL)
 # Suppress macOS OpenGL deprecation warnings (Apple deprecated GL in 10.14 but it still works)
 if(APPLE)
-    target_compile_definitions(imgui PUBLIC GL_SILENCE_DEPRECATION)
+    target_compile_definitions(imgui_backends PUBLIC GL_SILENCE_DEPRECATION)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -54,7 +55,7 @@ target_include_directories(app PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_link_libraries(app PRIVATE
-    imgui
+    imgui_backends
     glfw
     OpenGL::GL
     nlohmann_json::nlohmann_json

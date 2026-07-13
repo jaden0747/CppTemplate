@@ -107,4 +107,4 @@ while (app.running())
 }
 ```
 
-`main.cpp` is just orchestration: load settings → `setupLogging()` → construct `ImGuiApp` → `installSettingsBindings()` (wires `g_app`/`g_render` `onChanged` callbacks to window/GL state) → frame loop. The threaded ports demo lives in `app/counter_demo.hpp` (`CounterDemo`). ImGui is built from the `external/imgui` submodule — no GLAD needed.
+`main.cpp` is just orchestration: load settings → `setupLogging()` → construct `ImGuiApp` → `installSettingsBindings()` (wires `g_app`/`g_render` `onChanged` callbacks to window/GL state) → frame loop. The threaded ports demo lives in `app/counter_demo.hpp` (`CounterDemo`). ImGui (docking branch) comes from the `imgui/*-docking` Conan package — no GLAD needed. The package only compiles imgui core into `imgui::imgui`; backend (`imgui_impl_*`) and `imgui_stdlib` sources ship as package resources with no CMakeDeps variable, so `CMakeLists.txt` compiles them itself from `${imgui_PACKAGE_FOLDER_DEBUG}/res/{bindings,misc/cpp}` into a local `imgui_backends` target.

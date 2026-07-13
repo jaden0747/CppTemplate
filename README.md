@@ -46,8 +46,6 @@ test/
   test_data_container.cpp
   test_settings.cpp
   test_log.cpp
-external/
-  imgui/          — Dear ImGui (submodule)
 resources/
   settings.json   — Default settings file
   font/           — Bundled UI font
