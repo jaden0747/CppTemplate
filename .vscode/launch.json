@@ -5,6 +5,15 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "type": "lldb",
+            "request": "launch",
+            "name": "(Linux/MacOS) Launch",
+            "program": "${workspaceFolder}/build/Debug/app",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "console": "internalConsole",
+        },
+        {
             "name": "(Windows) Launch",
             "type": "cppvsdbg",
             "request": "launch",
@@ -15,6 +24,7 @@
             "environment": [
             ],
             "console": "internalConsole"
-        }
+        },
+
     ]
 }
