@@ -104,10 +104,10 @@ std::unique_ptr<cli::Menu> buildRootMenu()
         "export",
         [](std::ostream& out, const std::string& filename)
         {
-            SettingsRegistry::instance().saveJson(filename);
+            SettingsRegistry::instance().saveXml(filename);
             out << "Exported to \"" << filename << "\"\n";
         },
-        "Export all coding items to a JSON file");
+        "Export all coding items to an XML file");
 
     rootMenu->Insert(std::move(codingMenu));
 

@@ -48,7 +48,7 @@ struct RenderSettings : DirtyTracker
 protected:
     void onChanged() override
     {
-        // Called automatically after every loadJson / setItemValue
+        // Called automatically after every loadXml / setItemValue
         rebuildShadowMaps();
     }
 };
@@ -64,7 +64,7 @@ inline SettingsItem<AppConfig>      g_app{"AppConfig"};       // key = "AppConfi
 inline SettingsItem<RenderSettings> g_render{"RenderSettings"};
 ```
 
-Consumers (`app/main.cpp`, `app/cli_server.cpp`, tests) just `#include` the header — no per-binary re-declaration. The string key is how you address the item via the registry and the JSON file.
+Consumers (`app/main.cpp`, `app/cli_server.cpp`, tests) just `#include` the header — no per-binary re-declaration. The string key is how you address the item via the registry and the XML file (as the matching top-level element under `<Settings>`).
 
 ---
 
@@ -76,14 +76,13 @@ All access goes through the singleton:
 auto& reg = SettingsRegistry::instance();
 ```
 
-### Load from JSON file
+### Load from XML file
 
 ```cpp
-reg.loadJson("settings.json");
+reg.loadXml("settings.xml");
 ```
 
-Reads each top-level key from the JSON file and deserializes it into the matching registered item.
-Items with `DirtyTracker` have `dirty()` called automatically after loading.
+Reads each top-level `<Settings>` child element, matched by registered item key, and deserializes it into that item — internally still going through the same `nlohmann::json` `loader` every other code path uses (`setItemValue`, `resetItem`, the CLI, the editor); XML is purely a file-format concern layered on top. Field types (bool/number/string/array/object) are inferred from the item's default-constructed JSON shape, so the file itself carries no type annotations. Items with `DirtyTracker` have `dirty()` called automatically after loading. If the file doesn't exist, the current in-memory (default) values are written out as a new file instead.
 
 ### Read a single member
 
@@ -129,40 +128,44 @@ for (const auto& [key, entry] : reg.getItems())
 }
 ```
 
-### Save to JSON file
+### Save to XML file
 
 ```cpp
-reg.saveJson("out.json");
+reg.saveXml("out.xml");
 ```
 
-Serializes all registered items to a JSON file. The output can be loaded back with `loadJson`.
+Serializes all registered items to an XML file, always as child elements. The output can be loaded back with `loadXml`.
 
 ---
 
-## JSON file format
+## XML file format
 
-Each top-level key matches a registered item name. Only the fields you want to override need to be present — missing fields keep their C++ default values.
+Each top-level element under `<Settings>` matches a registered item name. Only the fields you want to override need to be present — missing fields keep their C++ default values. Scalar fields are child elements holding text; array/vector fields (e.g. `clearColor`) are a single element with whitespace-separated values; nested objects (e.g. `endpoint`) are nested elements.
 
-```json
-{
-  "AppConfig": {
-    "appName": "RegistryDemo",
-    "windowWidth": 1920,
-    "fullscreen": false
-  },
-  "RenderSettings": {
-    "shadowQuality": "high",
-    "maxLights": 16
-  },
-  "NetworkConfig": {
-    "endpoint": { "host": "192.168.1.100", "port": 9090 },
-    "timeoutMs": 3000,
-    "enableTLS": true
-  }
-}
+```xml
+<Settings>
+    <AppConfig>
+        <appName>RegistryDemo</appName>
+        <windowWidth>1920</windowWidth>
+        <fullscreen>false</fullscreen>
+    </AppConfig>
+    <RenderSettings>
+        <clearColor>0.2 0.2 0.25 1.0</clearColor>
+        <shadowQuality>high</shadowQuality>
+        <maxLights>16</maxLights>
+    </RenderSettings>
+    <NetworkConfig>
+        <endpoint>
+            <host>192.168.1.100</host>
+            <port>9090</port>
+        </endpoint>
+        <timeoutMs>3000</timeoutMs>
+        <enableTLS>true</enableTLS>
+    </NetworkConfig>
+</Settings>
 ```
 
-C-style `// comments` are supported in the input file.
+On **read**, attributes and child elements are treated interchangeably for scalar/array fields — `<AppConfig windowWidth="1920">` works the same as a `<windowWidth>` child element, and if a field is given as both, the child element wins. On **write**, the registry always emits child elements, so re-saved files are uniform regardless of how the source file was hand-edited.
 
 ---
 
@@ -201,7 +204,7 @@ python test/test_client.py
 | `coding get`                         | Dump all items as formatted JSON              |
 | `coding get <item>`                  | Dump one item as formatted JSON               |
 | `coding set <item> <member> <value>` | Set a member (value is JSON or a bare string) |
-| `coding export <file>`               | Write all items to a JSON file                |
+| `coding export <file>`               | Write all items to an XML file                |
 | `save <file>`                        | Alias for `coding export`                     |
 | `status`                             | Print all registered item keys                |
 | `echo <message>`                     | Echo a string back                            |
@@ -225,8 +228,8 @@ app> coding get RenderSettings
 app> coding set RenderSettings shadowQuality low
 OK
 
-app> save out.json
-Saved to "out.json"
+app> save out.xml
+Saved to "out.xml"
 ```
 
 ---
@@ -252,7 +255,7 @@ Expected output:
   modifiedCount: 0
   endpoint:     localhost:8080
 
-=== Step 2: loadJson ===
+=== Step 2: loadXml ===
 [RenderSettings] Settings updated (modifiedCount=1)
   appName:       RegistryDemo
   shadowQuality: high
@@ -278,8 +281,8 @@ Expected output:
     clearColor
     ...
 
-=== Step 6: saveJson ===
-  Saved current state to out.json
+=== Step 6: saveXml ===
+  Saved current state to out.xml
 
 All assertions passed.
 ```
@@ -304,5 +307,5 @@ src/settings_demo/
     cli_server_main.cpp     — Telnet CLI server
 
 resources/
-    settings.json           — default overrides (copied to build output)
+    settings.xml            — default overrides (copied to build output)
 ```

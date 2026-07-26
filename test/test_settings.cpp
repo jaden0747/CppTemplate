@@ -21,31 +21,33 @@ TEST(Settings, DefaultValues)
     EXPECT_FLOAT_EQ(g_app->targetFps, 60.0f);
 }
 
-TEST(Settings, LoadJson)
+TEST(Settings, LoadXml)
 {
-    // Write a temporary JSON file
-    const char* json = R"({
-        "AppConfig": {
-            "appName": "TestApp",
-            "windowWidth": 800,
-            "windowHeight": 600,
-            "fullscreen": true,
-            "targetFps": 30.0
-        },
-        "RenderSettings": {
-            "clearColor": [1.0, 0.0, 0.0, 1.0],
-            "wireframe": true,
-            "shadowQuality": "low",
-            "maxLights": 4
-        }
-    })";
+    // Write a temporary XML file. clearColor is whitespace-separated element
+    // text; windowWidth demonstrates an attribute (mixed with sibling
+    // elements) to exercise attribute-or-child-element parsing.
+    const char* xml = R"(<?xml version="1.0" encoding="UTF-8"?>
+    <Settings>
+        <AppConfig windowWidth="800">
+            <appName>TestApp</appName>
+            <windowHeight>600</windowHeight>
+            <fullscreen>true</fullscreen>
+            <targetFps>30.0</targetFps>
+        </AppConfig>
+        <RenderSettings>
+            <clearColor>1.0 0.0 0.0 1.0</clearColor>
+            <wireframe>true</wireframe>
+            <shadowQuality>low</shadowQuality>
+            <maxLights>4</maxLights>
+        </RenderSettings>
+    </Settings>)";
 
     {
-        std::ofstream f("test_settings_tmp.json");
-        f << json;
+        std::ofstream f("test_settings_tmp.xml");
+        f << xml;
     }
 
-    SettingsRegistry::instance().loadJson("test_settings_tmp.json");
+    SettingsRegistry::instance().loadXml("test_settings_tmp.xml");
 
     EXPECT_EQ(g_app->appName, "TestApp");
     EXPECT_EQ(g_app->windowWidth, 800);
@@ -55,9 +57,11 @@ TEST(Settings, LoadJson)
     EXPECT_TRUE(g_render->wireframe);
     EXPECT_EQ(g_render->shadowQuality, "low");
     EXPECT_EQ(g_render->maxLights, 4);
+    EXPECT_FLOAT_EQ(g_render->clearColor[0], 1.0f);
+    EXPECT_FLOAT_EQ(g_render->clearColor[3], 1.0f);
     EXPECT_GT(g_render->getModifiedCount(), 0u);
 
-    std::remove("test_settings_tmp.json");
+    std::remove("test_settings_tmp.xml");
 }
 
 TEST(Settings, SetItemValue)
@@ -100,17 +104,29 @@ TEST(Settings, SaveAndReload)
     auto& reg = SettingsRegistry::instance();
 
     reg.setItemValue<std::string>("AppConfig", "appName", "SaveTest");
-    reg.saveJson("test_save_tmp.json");
+    reg.saveXml("test_save_tmp.xml");
 
     // Modify in memory
     reg.setItemValue<std::string>("AppConfig", "appName", "Changed");
     EXPECT_EQ(g_app->appName, "Changed");
 
     // Reload
-    reg.loadJson("test_save_tmp.json");
+    reg.loadXml("test_save_tmp.xml");
     EXPECT_EQ(g_app->appName, "SaveTest");
 
-    std::remove("test_save_tmp.json");
+    std::remove("test_save_tmp.xml");
+}
+
+TEST(Settings, LoadXmlMissingFileWritesDefaults)
+{
+    std::remove("test_settings_missing.xml");
+
+    SettingsRegistry::instance().loadXml("test_settings_missing.xml");
+
+    std::ifstream f("test_settings_missing.xml");
+    EXPECT_TRUE(f.is_open());
+
+    std::remove("test_settings_missing.xml");
 }
 
 TEST(Settings, EnumOptionsAutoRegistered)

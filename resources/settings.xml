@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppConfig — overrides flat scalar defaults from AppConfig constructor -->
+<!-- RenderSettings — inherits DirtyTracker; dirty() fires on every load -->
+<!-- NetworkConfig — demonstrates nested sub-object (EndpointInfo) -->
+<Settings>
+    <AppConfig>
+        <appName>RegistryDemo</appName>
+        <windowWidth>2560</windowWidth>
+        <windowHeight>1600</windowHeight>
+        <fullscreen>false</fullscreen>
+        <targetFps>60.0</targetFps>
+        <uiFontSize>42.0</uiFontSize>
+        <uiFontPath>resources/font/ComicMonoNF-Regular.ttf</uiFontPath>
+        <logLevel>debug</logLevel>
+    </AppConfig>
+    <RenderSettings>
+        <clearColor>0.2 0.2 0.25 1.0</clearColor>
+        <wireframe>false</wireframe>
+        <shadowQuality>high</shadowQuality>
+        <maxLights>16</maxLights>
+    </RenderSettings>
+    <NetworkConfig>
+        <endpoint>
+            <host>192.168.1.100</host>
+            <port>9090</port>
+        </endpoint>
+        <timeoutMs>3000</timeoutMs>
+        <enableTLS>true</enableTLS>
+    </NetworkConfig>
+</Settings>

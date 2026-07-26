@@ -3,6 +3,7 @@
 #include "settings/dirty_tracker.hpp"
 
 #include <nlohmann/json.hpp>
+#include <libxml/tree.h>
 
 #include <cstdint>
 #include <functional>
@@ -61,8 +62,8 @@ public:
         m_items.emplace(key, std::move(entry));
     }
 
-    void loadJson(const std::string& path);
-    void saveJson(const std::string& path) const;
+    void loadXml(const std::string& path);
+    void saveXml(const std::string& path) const;
 
     template <typename T>
     bool setItemValue(const std::string& itemName, const std::string& memberName, const T& value)
@@ -126,6 +127,14 @@ private:
     SettingsRegistry()                                   = default;
     SettingsRegistry(const SettingsRegistry&)            = delete;
     SettingsRegistry& operator=(const SettingsRegistry&) = delete;
+
+    // XML <-> JSON conversion, schema-guided by a default-constructed instance's
+    // JSON shape (see Entry::defaulter) so text content can be coerced back into
+    // the right type (bool/number/string/array/object). Attributes and child
+    // elements are treated interchangeably on read (child element wins if a
+    // field is given as both); writes always use child elements.
+    static nlohmann::json xmlToJson(xmlNode* node, const nlohmann::json& schema);
+    static void           jsonToXml(xmlNode* parent, const std::string& name, const nlohmann::json& value);
 
     std::map<std::string, Entry>                                           m_items;
     std::map<std::string, std::map<std::string, std::vector<std::string>>> m_enumOptions;

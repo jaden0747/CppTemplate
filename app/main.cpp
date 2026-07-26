@@ -59,8 +59,8 @@ static void installSettingsBindings(ImGuiApp& app)
 int main()
 {
     // Enum combo options self-register from AppConfig::registerMetadata().
-    SettingsRegistry::instance().setAutoSave("settings.json");
-    SettingsRegistry::instance().loadJson("settings.json");
+    SettingsRegistry::instance().setAutoSave("settings.xml");
+    SettingsRegistry::instance().loadXml("settings.xml");
 
     auto imguiSink = setupLogging();
     auto appLog    = Log::get("app");

@@ -18,6 +18,7 @@ find_package(glm CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(LibXml2 REQUIRED)
 find_package(cli CONFIG REQUIRED)
 find_package(asio CONFIG REQUIRED)
 find_package(GTest REQUIRED)
@@ -62,6 +63,7 @@ add_library(libs STATIC
     libs/settings/dirty_tracker.cpp
     libs/settings/settings_editor.cpp
     libs/settings/settings_registry.cpp
+    libs/calculator/calculator.cpp
 )
 target_include_directories(libs PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -71,6 +73,7 @@ target_link_libraries(libs PUBLIC
     glfw
     OpenGL::GL
     nlohmann_json::nlohmann_json
+    LibXml2::LibXml2
     spdlog::spdlog_header_only
     Threads::Threads
     cli::cli
@@ -126,14 +129,14 @@ add_test(NAME unit_tests COMMAND tests)
 # ---------------------------------------------------------------------------
 add_custom_command(TARGET app POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/resources/settings.json"
-        "$<TARGET_FILE_DIR:app>/settings.json"
+        "${CMAKE_SOURCE_DIR}/resources/settings.xml"
+        "$<TARGET_FILE_DIR:app>/settings.xml"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources/font"
         "$<TARGET_FILE_DIR:app>/font"
 )
 add_custom_command(TARGET cli_server POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/resources/settings.json"
-        "$<TARGET_FILE_DIR:cli_server>/settings.json"
+        "${CMAKE_SOURCE_DIR}/resources/settings.xml"
+        "$<TARGET_FILE_DIR:cli_server>/settings.xml"
 )

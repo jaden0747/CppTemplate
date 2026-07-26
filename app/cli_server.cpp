@@ -31,18 +31,18 @@ int main(int argc, char* argv[])
             port = static_cast<uint16_t>(std::stoi(argv[i + 1]));
     }
 
-    SettingsRegistry::instance().loadJson("settings.json");
-    std::cout << "Settings loaded from settings.json\n";
+    SettingsRegistry::instance().loadXml("settings.xml");
+    std::cout << "Settings loaded from settings.xml\n";
 
     auto rootMenu = buildRootMenu();
     rootMenu->Insert(
         "save",
         [](std::ostream& out, const std::string& filename)
         {
-            SettingsRegistry::instance().saveJson(filename);
+            SettingsRegistry::instance().saveXml(filename);
             out << "Saved to \"" << filename << "\"\n";
         },
-        "Save all settings to a JSON file");
+        "Save all settings to an XML file");
 
     cli::Cli cli(std::move(rootMenu));
     cli.ExitAction([](std::ostream& out) { out << "Goodbye!\n"; });

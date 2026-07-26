@@ -6,14 +6,14 @@
 # Build
 
 ```bash
-conan install . --output-folder=build/Debug --build=missing -s build_type=Debug
+conan install . --build=missing -s build_type=Debug
 cmake --preset conan-debug
 cmake --build --preset conan-debug
 ctest --preset conan-debug
 ./build/Debug/tests --gtest_filter=DataContainer.*   # single test
 ```
 
-Targets: `app` (ImGui window), `cli_server` (telnet CLI), `tests` (GTest). After build, `settings.json` and `font/` are copied next to each binary.
+Targets: `app` (ImGui window), `cli_server` (telnet CLI), `tests` (GTest). After build, `settings.xml` and `font/` are copied next to each binary.
 
 # Code Style
 
@@ -29,11 +29,12 @@ struct MySettings {
     int count = 10;
     NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(MySettings, count)
 };
-inline SettingsItem<MySettings> g_my{"MySettings"};  // key matches settings.json
+inline SettingsItem<MySettings> g_my{"MySettings"};  // key matches settings.xml
 ```
 
 - Access: `g_my->count`, `g_my.data()`
-- Load/save the whole registry: `SettingsRegistry::instance().loadJson/saveJson("settings.json")`
+- Settings persist as XML (`settings.xml`), not JSON — the in-memory/wire model is still `nlohmann::json` throughout (`loader`/`saver`/`setItemValue`/CLI all unchanged); only the file format changed. `SettingsRegistry::loadXml`/`saveXml` convert via libxml2, schema-guided by each item's default-constructed JSON shape so field types (bool/number/string/array/object) come from the struct, not the file. Root element `<Settings>`, one child per item key; scalar fields are child-element text, arrays (e.g. `clearColor`) are whitespace-separated text in one element, nested objects are nested elements. Reading accepts attributes and child elements interchangeably (child element wins if both present); writing always emits child elements. Missing file on load → current in-memory defaults are written out as a new file.
+- Load/save the whole registry: `SettingsRegistry::instance().loadXml/saveXml("settings.xml")`
 - Targeted update: `SettingsRegistry::instance().setItemValue<int>("MySettings", "count", 42)`
 - Revert to defaults (the struct's member initializers, i.e. `T{}`): `resetItem("MySettings")` for a whole item, `resetItemValue("MySettings", "count")` for one member; `getDefaultJson("MySettings")` returns the defaults as JSON. Both resets apply via `loader`/`onLoaded` so change callbacks fire.
 - Editor metadata (enum combo options, etc.): add a `static void registerMetadata(SettingsRegistry&, const std::string& key)` to the struct — `SettingsItem<T>` detects and calls it at static-init time, so there's no manual `registerEnumOptions` wiring in `main()`. See `AppConfig` (`logLevel` options derived from the enum via `logLevelOptions()`).
@@ -85,7 +86,7 @@ sink->draw("Log");       // call each frame inside ImGui
 
 # Settings Editor (`include/settings/settings_editor.hpp`)
 
-Generic ImGui panel that introspects `SettingsRegistry` at runtime — no per-field boilerplate. Renders type-appropriate widgets (checkbox, drag int/float, text input, `ColorEdit4` for 4-float arrays whose key contains "olor", tree nodes for nested objects). Applies changes immediately via the registry's `loader`/`onLoaded` callbacks. Save and Reload buttons persist/restore `settings.json`. A per-field **Reset** button appears next to any value that differs from its default; a **Reset to Defaults** button reverts the whole selected item.
+Generic ImGui panel that introspects `SettingsRegistry` at runtime — no per-field boilerplate. Renders type-appropriate widgets (checkbox, drag int/float, text input, `ColorEdit4` for 4-float arrays whose key contains "olor", tree nodes for nested objects). Applies changes immediately via the registry's `loader`/`onLoaded` callbacks. Save and Reload buttons persist/restore `settings.xml`. A per-field **Reset** button appears next to any value that differs from its default; a **Reset to Defaults** button reverts the whole selected item.
 
 ```cpp
 SettingsEditor::draw("Settings");  // call once per frame inside ImGui

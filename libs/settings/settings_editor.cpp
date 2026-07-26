@@ -203,7 +203,7 @@ void draw(const char* title, bool* pOpen)
             entry.loader(entry.ptr, j);
             if (entry.onLoaded) entry.onLoaded(entry.ptr);
             if (!registry.getAutoSavePath().empty())
-                registry.saveJson(registry.getAutoSavePath());
+                registry.saveXml(registry.getAutoSavePath());
         }
     }
 
@@ -211,14 +211,14 @@ void draw(const char* title, bool* pOpen)
 
     // --- Bottom bar ---
     ImGui::Separator();
-    if (ImGui::Button("Save"))   registry.saveJson("settings.json");
+    if (ImGui::Button("Save"))   registry.saveXml("settings.xml");
     ImGui::SameLine();
-    if (ImGui::Button("Reload")) registry.loadJson("settings.json");
+    if (ImGui::Button("Reload")) registry.loadXml("settings.xml");
     ImGui::SameLine();
     if (ImGui::Button("Reset to Defaults"))
     {
         if (registry.resetItem(selectedKey) && !registry.getAutoSavePath().empty())
-            registry.saveJson(registry.getAutoSavePath());
+            registry.saveXml(registry.getAutoSavePath());
     }
 
     ImGui::End();
