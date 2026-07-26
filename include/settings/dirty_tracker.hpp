@@ -7,12 +7,7 @@
 class DirtyTracker
 {
 public:
-    void dirty()
-    {
-        ++m_modifiedCount;
-        for (auto& cb : m_callbacks)
-            cb();
-    }
+    void dirty();
 
     uint32_t getModifiedCount() const { return m_modifiedCount; }
 

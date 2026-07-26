@@ -5,9 +5,9 @@
         "logLevel": "info",
         "targetFps": 60.0,
         "uiFontPath": "resources/font/ComicMonoNF-Regular.ttf",
-        "uiFontSize": 35.310001373291016,
-        "windowHeight": 1250,
-        "windowWidth": 2063
+        "uiFontSize": 20.229999542236328,
+        "windowHeight": 796,
+        "windowWidth": 1252
     },
     "RenderSettings": {
         "clearColor": [

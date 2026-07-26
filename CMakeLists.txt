@@ -9,6 +9,8 @@ set(CMAKE_MAP_IMPORTED_CONFIG_RELEASE Debug)
 set(CMAKE_MAP_IMPORTED_CONFIG_MINSIZEREL Debug)
 set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO Debug)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # ---------------------------------------------------------------------------
 # Dependencies (via Conan)
 # ---------------------------------------------------------------------------
@@ -22,6 +24,7 @@ find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(imgui REQUIRED CONFIG)
+find_package(pybind11 REQUIRED CONFIG)
 
 # ---------------------------------------------------------------------------
 # Dear ImGui (docking branch, via Conan)
@@ -46,25 +49,45 @@ if(APPLE)
 endif()
 
 # ---------------------------------------------------------------------------
-# Main application — ImGui window + settings + sender/receiver demo
+# libs — implementation library for everything under include/ that isn't
+# purely template-based (dc::* ports and SettingsItem<T> stay header-only by
+# necessity; their non-template collaborators live here instead).
 # ---------------------------------------------------------------------------
-add_executable(app
-    app/main.cpp
+add_library(libs STATIC
+    libs/core/imgui_app.cpp
+    libs/core/imgui_log_sink.cpp
+    libs/core/log.cpp
+    libs/core/log_level.cpp
+    libs/settings/command_registry.cpp
+    libs/settings/dirty_tracker.cpp
+    libs/settings/settings_editor.cpp
+    libs/settings/settings_registry.cpp
 )
-target_include_directories(app PRIVATE
+target_include_directories(libs PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
-target_link_libraries(app PRIVATE
+target_link_libraries(libs PUBLIC
     imgui_backends
     glfw
     OpenGL::GL
     nlohmann_json::nlohmann_json
     spdlog::spdlog_header_only
     Threads::Threads
+    cli::cli
 )
 if(APPLE)
-    target_compile_definitions(app PRIVATE GL_SILENCE_DEPRECATION)
+    target_compile_definitions(libs PUBLIC GL_SILENCE_DEPRECATION)
 endif()
+
+# ---------------------------------------------------------------------------
+# Main application — ImGui window + settings + sender/receiver demo
+# ---------------------------------------------------------------------------
+add_executable(app
+    app/main.cpp
+)
+target_link_libraries(app PRIVATE
+    libs
+)
 
 # ---------------------------------------------------------------------------
 # CLI server — telnet-based settings inspector
@@ -72,15 +95,10 @@ endif()
 add_executable(cli_server
     app/cli_server.cpp
 )
-target_include_directories(cli_server PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
 target_compile_definitions(cli_server PRIVATE ASIO_STANDALONE)
 target_link_libraries(cli_server PRIVATE
-    nlohmann_json::nlohmann_json
-    cli::cli
+    libs
     asio::asio
-    Threads::Threads
 )
 if(WIN32)
     target_link_libraries(cli_server PRIVATE ws2_32 mswsock)
@@ -96,15 +114,10 @@ add_executable(tests
     test/test_settings.cpp
     test/test_log.cpp
 )
-target_include_directories(tests PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
 target_link_libraries(tests PRIVATE
+    libs
     GTest::gtest
     GTest::gtest_main
-    nlohmann_json::nlohmann_json
-    spdlog::spdlog_header_only
-    Threads::Threads
 )
 add_test(NAME unit_tests COMMAND tests)
 

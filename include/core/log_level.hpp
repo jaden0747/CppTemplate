@@ -15,19 +15,9 @@ NLOHMANN_JSON_SERIALIZE_ENUM(LogLevel, {
     {LogLevel::critical, "critical"},
 })
 
-inline std::string toString(LogLevel level)
-{
-    return nlohmann::json(level).get<std::string>();
-}
+std::string toString(LogLevel level);
 
 // Display options for the settings editor combo box. Strings are derived from
 // the NLOHMANN_JSON_SERIALIZE_ENUM map above (single source of truth), so they
 // always match what gets serialized to JSON.
-inline std::vector<std::string> logLevelOptions()
-{
-    std::vector<std::string> opts;
-    for (LogLevel l : {LogLevel::trace, LogLevel::debug, LogLevel::info,
-                       LogLevel::warn, LogLevel::err, LogLevel::critical})
-        opts.push_back(toString(l));
-    return opts;
-}
+std::vector<std::string> logLevelOptions();
