@@ -13,7 +13,9 @@ ctest --preset conan-debug
 ./build/Debug/tests --gtest_filter=DataContainer.*   # single test
 ```
 
-Targets: `app` (ImGui window), `cli_server` (telnet CLI), `tests` (GTest). After build, `settings.xml` and `font/` are copied next to each binary.
+Targets: `app` (ImGui window), `cli_server` (telnet CLI), `tui` (FTXUI component gallery demo), `tui_imtui` (ImTui ncurses demo), `tests` (GTest). After build, `settings.xml` and `font/` are copied next to `app`/`cli_server`.
+
+`imtui` isn't on ConanCenter, so `cmake --preset conan-debug`'s configure step fetches it (and its patched Dear ImGui fork) via CMake `FetchContent` — needs network access on a clean configure.
 
 # Code Style
 

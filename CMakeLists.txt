@@ -28,6 +28,8 @@ find_package(imgui REQUIRED CONFIG)
 find_package(pybind11 REQUIRED CONFIG)
 find_package(ftxui REQUIRED CONFIG)
 
+include(FetchContent)
+
 # ---------------------------------------------------------------------------
 # Dear ImGui (docking branch, via Conan)
 # The conan-center recipe only compiles imgui core into imgui::imgui; backend
@@ -53,16 +55,15 @@ endif()
 # ---------------------------------------------------------------------------
 # libs — implementation library for everything under include/ that isn't
 # purely template-based (dc::* ports and SettingsItem<T> stay header-only by
-# necessity; their non-template collaborators live here instead).
+# necessity; their non-template collaborators live here instead). Kept free
+# of Dear ImGui so it can be linked into targets (cli_server, tui, tui_imtui)
+# that must not pull in ImGui — see libs_imgui below for why that matters.
 # ---------------------------------------------------------------------------
 add_library(libs STATIC
-    libs/core/imgui_app.cpp
-    libs/core/imgui_log_sink.cpp
     libs/core/log.cpp
     libs/core/log_level.cpp
     libs/settings/command_registry.cpp
     libs/settings/dirty_tracker.cpp
-    libs/settings/settings_editor.cpp
     libs/settings/settings_registry.cpp
     libs/calculator/calculator.cpp
 )
@@ -70,17 +71,32 @@ target_include_directories(libs PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_link_libraries(libs PUBLIC
-    imgui_backends
-    glfw
-    OpenGL::GL
     nlohmann_json::nlohmann_json
     LibXml2::LibXml2
     spdlog::spdlog_header_only
     Threads::Threads
     cli::cli
 )
+
+# ---------------------------------------------------------------------------
+# libs_imgui — the subset of libs/ that depends on real Dear ImGui
+# (imgui::imgui). Split out from libs so that tui_imtui, which links its own
+# vendored/patched ImGui fork (see the ImTui section below), never ends up
+# with both ImGui builds' identically-named symbols in one binary.
+# ---------------------------------------------------------------------------
+add_library(libs_imgui STATIC
+    libs/core/imgui_app.cpp
+    libs/core/imgui_log_sink.cpp
+    libs/settings/settings_editor.cpp
+)
+target_link_libraries(libs_imgui PUBLIC
+    libs
+    imgui_backends
+    glfw
+    OpenGL::GL
+)
 if(APPLE)
-    target_compile_definitions(libs PUBLIC GL_SILENCE_DEPRECATION)
+    target_compile_definitions(libs_imgui PUBLIC GL_SILENCE_DEPRECATION)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -90,7 +106,7 @@ add_executable(app
     app/main.cpp
 )
 target_link_libraries(app PRIVATE
-    libs
+    libs_imgui
 )
 
 # ---------------------------------------------------------------------------
@@ -109,17 +125,97 @@ if(WIN32)
 endif()
 
 # ---------------------------------------------------------------------------
-# TUI — FTXUI-based terminal settings viewer/editor
+# TUI — FTXUI component gallery (vendored from FTXUI's own example, see
+# app/tui_main.cpp), demonstrating what the library can do.
 # ---------------------------------------------------------------------------
 add_executable(tui
     app/tui_main.cpp
-    libs/settings/settings_tui.cpp
 )
 target_link_libraries(tui PRIVATE
-    libs
     ftxui::screen
     ftxui::dom
     ftxui::component
+)
+
+# ---------------------------------------------------------------------------
+# ImTui — Dear ImGui rendered to a terminal via (pd)curses. Not on
+# ConanCenter, so it's vendored with FetchContent. ImTui ships its own
+# patched Dear ImGui fork (ggerganov/imgui@imtui, pinned to the commit ImTui
+# v1.0.5's submodule points at) and its own CMakeLists.txt assumes a
+# MinGW/Unix toolchain (Windows handling is marked "todo" upstream), so
+# rather than add_subdirectory()'ing it, its handful of source files are
+# compiled directly here instead — the same approach imgui_backends above
+# takes with the Conan imgui package's resource sources. Populate-only (no
+# add_subdirectory) so neither repo's own build logic runs.
+# ---------------------------------------------------------------------------
+FetchContent_Declare(imtui
+    GIT_REPOSITORY https://github.com/ggerganov/imtui.git
+    GIT_TAG        v1.0.5
+)
+FetchContent_GetProperties(imtui)
+if(NOT imtui_POPULATED)
+    FetchContent_Populate(imtui)
+endif()
+
+FetchContent_Declare(imtui_imgui_fork
+    GIT_REPOSITORY https://github.com/ggerganov/imgui.git
+    GIT_TAG        7a6176e15e762ed9f50beadb8e2013743eb3ccd0 # pinned by imtui v1.0.5's third-party/imgui/imgui submodule
+    SOURCE_DIR     ${CMAKE_BINARY_DIR}/_deps/imtui_imgui_fork-src/imgui
+)
+FetchContent_GetProperties(imtui_imgui_fork)
+if(NOT imtui_imgui_fork_POPULATED)
+    FetchContent_Populate(imtui_imgui_fork)
+endif()
+get_filename_component(IMTUI_IMGUI_FORK_ROOT ${imtui_imgui_fork_SOURCE_DIR} DIRECTORY)
+
+# ImTui's forked/patched Dear ImGui core — kept entirely separate from the
+# imgui::imgui Conan package (different version, same symbol names) so it
+# must never be linked into the same binary as libs_imgui/imgui_backends.
+add_library(imgui_for_imtui STATIC
+    ${imtui_imgui_fork_SOURCE_DIR}/imgui.cpp
+    ${imtui_imgui_fork_SOURCE_DIR}/imgui_draw.cpp
+    ${imtui_imgui_fork_SOURCE_DIR}/imgui_demo.cpp
+    ${imtui_imgui_fork_SOURCE_DIR}/imgui_widgets.cpp
+    ${imtui_imgui_fork_SOURCE_DIR}/imgui_tables.cpp
+)
+target_include_directories(imgui_for_imtui PUBLIC ${IMTUI_IMGUI_FORK_ROOT})
+
+add_library(imtui_core STATIC
+    ${imtui_SOURCE_DIR}/src/imtui-impl-text.cpp
+)
+target_include_directories(imtui_core PUBLIC ${imtui_SOURCE_DIR}/include)
+target_link_libraries(imtui_core PUBLIC imgui_for_imtui)
+
+add_library(imtui_ncurses STATIC
+    ${imtui_SOURCE_DIR}/src/imtui-impl-ncurses.cpp
+)
+target_link_libraries(imtui_ncurses PUBLIC imtui_core)
+if(WIN32)
+    # ImTui's Windows branch (src/imtui-impl-ncurses.cpp) includes
+    # <pdcurses.h>, but ConanCenter's pdcurses package only ships the
+    # conventional <curses.h>. This one-line shim bridges the two.
+    find_package(pdcurses REQUIRED CONFIG)
+    target_include_directories(imtui_ncurses PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/pdcurses_shim)
+    target_link_libraries(imtui_ncurses PUBLIC pdcurses::pdcurses)
+else()
+    # Conan's ncurses package overrides find_package(Curses) (Module mode)
+    # with its own generated shim, same as how LibXml2 is resolved above, so
+    # this resolves to the Conan-installed ncurses rather than a
+    # system-installed one.
+    find_package(Curses REQUIRED)
+    target_include_directories(imtui_ncurses PRIVATE ${CURSES_INCLUDE_DIR})
+    target_link_libraries(imtui_ncurses PUBLIC ${CURSES_LIBRARIES})
+endif()
+
+# tui_imtui — ImTui's own ncurses demo (see app/tui_imtui_main.cpp), the
+# classic Dear ImGui demo window ported to text, demonstrating what the
+# library can do.
+add_executable(tui_imtui
+    app/tui_imtui_main.cpp
+    app/imtui_demo.cpp
+)
+target_link_libraries(tui_imtui PRIVATE
+    imtui_ncurses
 )
 
 # ---------------------------------------------------------------------------
@@ -154,9 +250,4 @@ add_custom_command(TARGET cli_server POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_SOURCE_DIR}/resources/settings.xml"
         "$<TARGET_FILE_DIR:cli_server>/settings.xml"
-)
-add_custom_command(TARGET tui POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/resources/settings.xml"
-        "$<TARGET_FILE_DIR:tui>/settings.xml"
 )
