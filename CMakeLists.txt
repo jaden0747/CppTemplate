@@ -26,6 +26,7 @@ find_package(Threads REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(imgui REQUIRED CONFIG)
 find_package(pybind11 REQUIRED CONFIG)
+find_package(ftxui REQUIRED CONFIG)
 
 # ---------------------------------------------------------------------------
 # Dear ImGui (docking branch, via Conan)
@@ -108,6 +109,20 @@ if(WIN32)
 endif()
 
 # ---------------------------------------------------------------------------
+# TUI — FTXUI-based terminal settings viewer/editor
+# ---------------------------------------------------------------------------
+add_executable(tui
+    app/tui_main.cpp
+    libs/settings/settings_tui.cpp
+)
+target_link_libraries(tui PRIVATE
+    libs
+    ftxui::screen
+    ftxui::dom
+    ftxui::component
+)
+
+# ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
 enable_testing()
@@ -139,4 +154,9 @@ add_custom_command(TARGET cli_server POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_SOURCE_DIR}/resources/settings.xml"
         "$<TARGET_FILE_DIR:cli_server>/settings.xml"
+)
+add_custom_command(TARGET tui POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/resources/settings.xml"
+        "$<TARGET_FILE_DIR:tui>/settings.xml"
 )
