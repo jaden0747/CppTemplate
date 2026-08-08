@@ -1,62 +1,135 @@
+# What this repo is
+
+`pf` — reusable **platform** code, consumed by other projects as a Conan package.
+Everything under `include/pf/` + `src/pf/` is the shipped library and lives in
+`namespace pf`. Everything else (`app/`, `examples/`, `tutorial/`, `test/`) is
+demo, tutorial or test code that exercises it and is **not** shipped.
+
+When adding code, decide which side of that line it belongs on first. Platform
+code may not depend on demo code, and may not hardcode anything app-specific
+(file names, window titles, schema).
+
 # Ground Rules
 
-- Any configurable value or static/global variable **must** live in a `SettingsItem<T>` struct — never as a hardcoded constant, bare global, or a separate config mechanism.
-- Any data passed between threads **must** go through a `dc::SenderPort` / `dc::ReceiverPort` pipeline — never via shared globals, queues, or condition variables.
+- Any configurable value or static/global variable **must** live in a `pf::SettingsItem<T>` struct — never as a hardcoded constant, bare global, or a separate config mechanism.
+- Any data passed between threads **must** go through a `pf::dc::SenderPort` / `pf::dc::ReceiverPort` pipeline — never via shared globals, queues, or condition variables.
 
 # Build
 
 ```bash
 conan install . --build=missing -s build_type=Debug
-cmake --preset conan-debug
+cmake --preset conan-default     # multi-config generators (Visual Studio)
+# cmake --preset conan-debug     # single-config generators (Ninja/Makefiles)
 cmake --build --preset conan-debug
 ctest --preset conan-debug
-./build/Debug/tests --gtest_filter=DataContainer.*   # single test
+./build/Debug/tests --gtest_filter=Mempool.*   # single test
 ```
 
-Targets: `app` (ImGui window), `cli_server` (telnet CLI), `tui` (FTXUI component gallery demo), `tui_imtui` (ImTui ncurses demo, non-Windows only — see below), `ftxui_tutorial` (progressive FTXUI tutorial — see `tutorial/ftxui/TUTORIAL.md`), `tests` (GTest). After build, `settings.xml` and `font/` are copied next to `app`/`cli_server`.
+Which configure preset Conan generates depends on the generator: multi-config
+(Visual Studio) gets `conan-default` only, single-config gets `conan-debug`.
+The **build** preset is `conan-debug` either way.
 
-`imtui` isn't on ConanCenter, so `cmake --preset conan-debug`'s configure step fetches it (and its patched Dear ImGui fork) via CMake `FetchContent` — needs network access on a clean configure. The whole `tui_imtui` target (and its `ncurses` Conan dependency) is dropped on Windows — ImTui's ncurses backend there depends on pdcurses plus a hand-written shim header, which wasn't worth maintaining; see the `if(NOT WIN32)` block in `CMakeLists.txt`.
+## Library targets (shipped)
+
+| Target | Contents | Links |
+|---|---|---|
+| `pf::dc` | sender/receiver ports (INTERFACE, header-only) | — |
+| `pf::log` | spdlog wrapper, named loggers, `LogLevel` | nlohmann_json, spdlog |
+| `pf::settings` | registry, typed items, dirty tracking, XML persistence | nlohmann_json, libxml2 |
+| `pf::cli` | settings registry over daniele77/cli | `pf::settings`, cli |
+| `pf::ui_imgui` | window host, settings editor, ImGui log sink | `pf::settings`, `pf::log`, imgui, glfw, GL |
+
+Link only what you need — a headless consumer takes `pf::dc` + `pf::log` and
+never pulls in libxml2, the CLI stack, OpenGL or Dear ImGui.
+
+There is deliberately **no `pf::ui_ftxui`** yet: nothing FTXUI-side has been
+extracted from the tutorial into reusable platform code.
+
+## Non-shipped targets
+
+`demo::config` (INTERFACE — example settings structs and port payloads under
+`examples/include/demo/`, `namespace demo`), `app` (ImGui window), `cli_server`
+(telnet CLI), `tui` (FTXUI component gallery), `tui_imtui` (ImTui ncurses demo,
+non-Windows only), `ftxui_tutorial` (see `tutorial/ftxui/TUTORIAL.md`), `tests`
+(GTest). After build, `settings.xml` and `font/` are copied next to
+`app`/`cli_server`.
+
+## Packaging status
+
+Not yet a Conan package — `conanfile.py` is still a consumer file
+(`requirements()` + `cmake_layout()`), and `CMakeLists.txt` has no
+`install()`/`export()` rules. Two things block that and must be fixed first:
+
+1. `CMAKE_MAP_IMPORTED_CONFIG_*` at the top of `CMakeLists.txt` forces every
+   config to Debug, and `imgui_backends` reads `${imgui_PACKAGE_FOLDER_DEBUG}`
+   with a literal `_DEBUG` suffix. Downstream consumers will build Release.
+2. `imgui_backends` compiles sources out of the Conan package folder using
+   absolute paths, so `pf::ui_imgui` has no valid `INSTALL_INTERFACE`.
+
+`imtui` isn't on ConanCenter, so the configure step fetches it (and its patched
+Dear ImGui fork) via CMake `FetchContent` — needs network access on a clean
+configure, and should become a local Conan recipe under `recipes/imtui`. The
+whole `tui_imtui` target (and its `ncurses` Conan dependency) is dropped on
+Windows — ImTui's ncurses backend there depends on pdcurses plus a hand-written
+shim header, which wasn't worth maintaining; see the `if(NOT WIN32)` block in
+`CMakeLists.txt`.
 
 # Code Style
 
 clang-format: Allman braces, 4-space indent, 120-column limit, pointer-left. C++17.
 
-# Settings (`include/settings/`)
+Public headers are included as `<pf/<component>/<header>.hpp>` (angle brackets),
+never relative paths.
 
-Define a struct with `NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT` and declare an `inline SettingsItem<T>` global next to it in the header — it self-registers at static-init time, and the `inline` keyword gives one shared definition across every binary that includes the header. See `include/settings/examples/` for canonical patterns (flat, nested, `DirtyTracker`).
+# Settings (`include/pf/settings/`)
+
+Define a struct with `NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT` and declare an `inline pf::SettingsItem<T>` global next to it in the header — it self-registers at static-init time, and the `inline` keyword gives one shared definition across every binary that includes the header. See `examples/include/demo/` for canonical patterns (flat, nested, `pf::DirtyTracker`) and `include/pf/settings/README.md` for the full API.
 
 ```cpp
 // my_settings.hpp
+#include <pf/settings/settings_item.hpp>
+
 struct MySettings {
     int count = 10;
     NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(MySettings, count)
 };
-inline SettingsItem<MySettings> g_my{"MySettings"};  // key matches settings.xml
+inline pf::SettingsItem<MySettings> g_my{"MySettings"};  // key matches settings.xml
 ```
 
-- Access: `g_my->count`, `g_my.data()`
-- Settings persist as XML (`settings.xml`), not JSON — the in-memory/wire model is still `nlohmann::json` throughout (`loader`/`saver`/`setItemValue`/CLI all unchanged); only the file format changed. `SettingsRegistry::loadXml`/`saveXml` convert via libxml2, schema-guided by each item's default-constructed JSON shape so field types (bool/number/string/array/object) come from the struct, not the file. Root element `<Settings>`, one child per item key; scalar fields are child-element text, arrays (e.g. `clearColor`) are whitespace-separated text in one element, nested objects are nested elements. Reading accepts attributes and child elements interchangeably (child element wins if both present); writing always emits child elements. Missing file on load → current in-memory defaults are written out as a new file.
-- Load/save the whole registry: `SettingsRegistry::instance().loadXml/saveXml("settings.xml")`
-- Targeted update: `SettingsRegistry::instance().setItemValue<int>("MySettings", "count", 42)`
-- Revert to defaults (the struct's member initializers, i.e. `T{}`): `resetItem("MySettings")` for a whole item, `resetItemValue("MySettings", "count")` for one member; `getDefaultJson("MySettings")` returns the defaults as JSON. Both resets apply via `loader`/`onLoaded` so change callbacks fire.
-- Editor metadata (enum combo options, etc.): add a `static void registerMetadata(SettingsRegistry&, const std::string& key)` to the struct — `SettingsItem<T>` detects and calls it at static-init time, so there's no manual `registerEnumOptions` wiring in `main()`. See `AppConfig` (`logLevel` options derived from the enum via `logLevelOptions()`).
-- Change detection: inherit `DirtyTracker`, then register a callback with `setOnChanged()` — fired automatically after every load/set. Register callbacks after app resources (windows, GL context) are ready, not at static-init time.
-- CLI access: `buildRootMenu()` exposes the registry via `coding list/get/set/export`; connect with `telnet localhost 5000`
+The registry key (`"MySettings"`) and the matching XML element name are plain
+strings — they are **not** affected by whatever namespace the struct lives in.
 
-# Sender/Receiver Ports (`include/core/dc/data_container.hpp`, namespace `dc`)
+- Access: `g_my->count`, `g_my.data()`
+- Settings persist as XML (`settings.xml`), not JSON — the in-memory/wire model is still `nlohmann::json` throughout (`loader`/`saver`/`setItemValue`/CLI all unchanged); only the file format changed. `pf::SettingsRegistry::loadXml`/`saveXml` convert via libxml2, schema-guided by each item's default-constructed JSON shape so field types (bool/number/string/array/object) come from the struct, not the file. Root element `<Settings>`, one child per item key; scalar fields are child-element text, arrays (e.g. `clearColor`) are whitespace-separated text in one element, nested objects are nested elements. Reading accepts attributes and child elements interchangeably (child element wins if both present); writing always emits child elements. Missing file on load → current in-memory defaults are written out as a new file.
+- Load/save the whole registry: `pf::SettingsRegistry::instance().loadXml/saveXml("settings.xml")`
+- Targeted update: `pf::SettingsRegistry::instance().setItemValue<int>("MySettings", "count", 42)`
+- Revert to defaults (the struct's member initializers, i.e. `T{}`): `resetItem("MySettings")` for a whole item, `resetItemValue("MySettings", "count")` for one member; `getDefaultJson("MySettings")` returns the defaults as JSON. Both resets apply via `loader`/`onLoaded` so change callbacks fire.
+- Editor metadata (enum combo options, etc.): add a `static void registerMetadata(pf::SettingsRegistry&, const std::string& key)` to the struct — `pf::SettingsItem<T>` detects and calls it at static-init time, so there's no manual `registerEnumOptions` wiring in `main()`. See `demo::AppConfig` (`logLevel` options derived from the enum via `pf::logLevelOptions()`).
+- Change detection: inherit `pf::DirtyTracker`, then register a callback with `onChanged()` — fired automatically after every load/set. Register callbacks after app resources (windows, GL context) are ready, not at static-init time.
+- CLI access: `pf::buildRootMenu()` exposes the registry via `coding list/get/set/export`; connect with `telnet localhost 5000`
+
+**Known gap:** `pf::SettingsItem`'s destructor doesn't unregister from the
+registry, and `pf::SettingsRegistry` has no `remove()`/`clear()`. Safe for the
+`inline` file-scope globals above; a `SettingsItem` created in a function or as
+a class member leaves the registry holding a dangling pointer. Tests share
+registry state for the same reason.
+
+# Sender/Receiver Ports (`include/pf/dc/data_container.hpp`, namespace `pf::dc`)
 
 Pool and sender are file-scope; receiver lives at the consumer site.
 
 ```cpp
-dc::Mempool<T>    g_pool(4);
-dc::SenderPort<T> g_sender;
+#include <pf/dc/data_container.hpp>
+
+pf::dc::Mempool<T>    g_pool(4);
+pf::dc::SenderPort<T> g_sender;
 g_sender.connectMempool(g_pool);          // producer thread
 
-dc::ReceiverPort<T> receiver;
+pf::dc::ReceiverPort<T> receiver;
 receiver.connect(g_sender);               // consumer thread
 ```
 
-Producer: `reserve()` → fill → `deliver()`. Returns `nullptr` when pool is exhausted — drop the send.
+Producer: `reserve()` → fill → `deliver()`. Returns `nullptr` when pool is exhausted — drop the send. There is currently no counter for dropped sends, so a slow consumer starves the producer silently.
 
 Consumer (main loop):
 ```cpp
@@ -68,40 +141,42 @@ receiver.cleanup();         // clear hasNewData; hasData() persists
 
 Latest-wins: multiple sends before `update()` collapse to the last value.
 
-Payload types (`T`) are the contract between producer and consumer — define each as a plain struct in its own header under `include/core/dc/interface/` (namespace `dc`), one per file, so both threads share a single definition. A payload must be default-constructible and copy-assignable (`Mempool` resets slots with `T{}`; fan-out copies them).
+Payload types (`T`) are the contract between producer and consumer, and are owned by the **application**, not the platform — define each as a plain struct in its own header in your own namespace (this repo uses `namespace demo`, under `examples/include/demo/dc/`), one per file, so both threads share a single definition. A payload must be default-constructible and copy-assignable (`Mempool` resets slots with `T{}`; fan-out copies them).
 
-# Logging (`include/core/log.hpp`)
+# Logging (`include/pf/log/log.hpp`)
 
 ```cpp
-static auto log = Log::get("mymodule");   // safe before Log::init()
+#include <pf/log/log.hpp>
+
+static auto log = pf::Log::get("mymodule");   // safe before pf::Log::init()
 log->info("value={}", x);
 ```
 
-Init once after settings load: `Log::init(g_app->logLevel, "app.log")`.
+Init once after settings load: `pf::Log::init(demo::g_app->logLevel, "app.log")`.
 
-ImGui sink (app only):
+ImGui sink (app only, `pf::ui_imgui`):
 ```cpp
-auto sink = std::make_shared<ImGuiLogSink_mt>();
-Log::addSink(sink);      // propagates to all existing loggers
+auto sink = std::make_shared<pf::ImGuiLogSink_mt>();
+pf::Log::addSink(sink);  // propagates to all existing loggers
 sink->draw("Log");       // call each frame inside ImGui
 ```
 
-# Settings Editor (`include/settings/settings_editor.hpp`)
+# Settings Editor (`include/pf/ui/settings_editor.hpp`)
 
-Generic ImGui panel that introspects `SettingsRegistry` at runtime — no per-field boilerplate. Renders type-appropriate widgets (checkbox, drag int/float, text input, `ColorEdit4` for 4-float arrays whose key contains "olor", tree nodes for nested objects). Applies changes immediately via the registry's `loader`/`onLoaded` callbacks. Save and Reload buttons persist/restore `settings.xml`. A per-field **Reset** button appears next to any value that differs from its default; a **Reset to Defaults** button reverts the whole selected item.
+Generic ImGui panel that introspects `pf::SettingsRegistry` at runtime — no per-field boilerplate. Renders type-appropriate widgets (checkbox, drag int/float, text input, `ColorEdit4` for 4-float arrays whose key contains "olor", tree nodes for nested objects). Applies changes immediately via the registry's `loader`/`onLoaded` callbacks. Save and Reload buttons persist/restore `settings.xml`. A per-field **Reset** button appears next to any value that differs from its default; a **Reset to Defaults** button reverts the whole selected item.
 
 ```cpp
-SettingsEditor::draw("Settings");  // call once per frame inside ImGui
+pf::SettingsEditor::draw("Settings");  // call once per frame inside ImGui
 ```
 
-New `SettingsItem<T>` structs appear automatically — no changes to the editor needed.
+New `pf::SettingsItem<T>` structs appear automatically — no changes to the editor needed.
 
-# ImGui App (`include/core/imgui_app.hpp`, `app/main.cpp`)
+# ImGui App (`include/pf/ui/imgui_app.hpp`, `app/main.cpp`)
 
-`ImGuiApp` is an RAII host that owns the GLFW window + Dear ImGui + OpenGL 3.3 (3.2 on macOS) lifecycle, including the fullscreen DockSpace and UI font. Construct it with an `ImGuiApp::Config`; the constructor throws `std::runtime_error` on failure. Draw panels between `beginFrame()` and `endFrame(clearColor)`:
+`pf::ImGuiApp` is an RAII host that owns the GLFW window + Dear ImGui + OpenGL 3.3 (3.2 on macOS) lifecycle, including the fullscreen DockSpace and UI font. Construct it with a `pf::ImGuiApp::Config`; the constructor throws `std::runtime_error` on failure. Draw panels between `beginFrame()` and `endFrame(clearColor)`:
 
 ```cpp
-ImGuiApp app({width, height, title, fontPath, fontSize});
+pf::ImGuiApp app({width, height, title, fontPath, fontSize});
 while (app.running())
 {
     app.beginFrame();          // poll events, new frame, dockspace
@@ -110,4 +185,4 @@ while (app.running())
 }
 ```
 
-`main.cpp` is just orchestration: load settings → `setupLogging()` → construct `ImGuiApp` → `installSettingsBindings()` (wires `g_app`/`g_render` `onChanged` callbacks to window/GL state) → frame loop. The threaded ports demo lives in `app/counter_demo.hpp` (`CounterDemo`). ImGui (docking branch) comes from the `imgui/*-docking` Conan package — no GLAD needed. The package only compiles imgui core into `imgui::imgui`; backend (`imgui_impl_*`) and `imgui_stdlib` sources ship as package resources with no CMakeDeps variable, so `CMakeLists.txt` compiles them itself from `${imgui_PACKAGE_FOLDER_DEBUG}/res/{bindings,misc/cpp}` into a local `imgui_backends` target.
+`main.cpp` is just orchestration: load settings → `setupLogging()` → construct `pf::ImGuiApp` → `installSettingsBindings()` (wires `demo::g_app`/`demo::g_render` `onChanged` callbacks to window/GL state) → frame loop. The threaded ports demo lives in `app/counter_demo.hpp` (`CounterDemo`). ImGui (docking branch) comes from the `imgui/*-docking` Conan package — no GLAD needed. The package only compiles imgui core into `imgui::imgui`; backend (`imgui_impl_*`) and `imgui_stdlib` sources ship as package resources with no CMakeDeps variable, so `CMakeLists.txt` compiles them itself from `${imgui_PACKAGE_FOLDER_DEBUG}/res/{bindings,misc/cpp}` into a local `imgui_backends` target.

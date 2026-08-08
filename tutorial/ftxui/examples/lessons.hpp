@@ -38,9 +38,9 @@ inline const std::vector<Lesson>& Lessons()
         {"03. Built-in components", RunLesson03},
         {"04. Events & focus", RunLesson04},
         {"05. Custom components", RunLesson05},
-        {"06. Cross-thread updates (dc:: ports)", RunLesson06},
-        {"07. Settings-driven panel (SettingsRegistry)", RunLesson07},
-        {"08. Terminal log panel (Log::addSink)", RunLesson08},
+        {"06. Cross-thread updates (pf::dc:: ports)", RunLesson06},
+        {"07. Settings-driven panel (pf::SettingsRegistry)", RunLesson07},
+        {"08. Terminal log panel (pf::Log::addSink)", RunLesson08},
         {"09. Capstone - tabs", RunLesson09},
         {"10. Capstone - resizable split", RunLesson10},
     };

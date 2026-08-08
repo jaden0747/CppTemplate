@@ -2,8 +2,8 @@
 
 A hands-on, code-first walkthrough of [FTXUI](https://github.com/ArthurSonzogni/FTXUI) 5.0.0 — this
 project's terminal-UI library — building from bare DOM elements up to a
-capstone app that wires FTXUI into this project's own `SettingsItem<T>`,
-`dc::SenderPort`/`ReceiverPort`, and `Log` systems.
+capstone app that wires FTXUI into this project's own `pf::SettingsItem<T>`,
+`pf::dc::SenderPort`/`ReceiverPort`, and `Log` systems.
 
 Assumes you're already comfortable with immediate-mode UI concepts (this
 project's `app/` leans heavily on Dear ImGui) — so this skips re-explaining
@@ -36,7 +36,7 @@ tutorial/ftxui/
     lesson_04_events_and_focus.cpp
     lesson_05_custom_components.cpp
     lesson_06_dc_ports.cpp
-    tutorial_settings.hpp   — shared SettingsItem<T>, used by lesson 07 and the capstones
+    tutorial_settings.hpp   — shared pf::SettingsItem<T>, used by lesson 07 and the capstones
     lesson_07_settings_panel.cpp
     lesson_08_log_panel.cpp
     capstone_panels.hpp/.cpp — DataPanel/LogPanel/SettingsPanel, shared by lessons 09-10
@@ -45,8 +45,8 @@ tutorial/ftxui/
 ```
 
 Plus one new payload header outside `tutorial/`, per this project's port
-convention (`include/core/dc/interface/`, one payload per file):
-`include/core/dc/interface/tutorial_tick.hpp`, used by lesson 06 and the
+convention (`examples/include/demo/dc/`, one payload per file):
+`examples/include/demo/dc/tutorial_tick.hpp`, used by lesson 06 and the
 capstones.
 
 ---
@@ -97,9 +97,9 @@ inline const std::vector<Lesson>& Lessons()
         {"03. Built-in components", RunLesson03},
         {"04. Events & focus", RunLesson04},
         {"05. Custom components", RunLesson05},
-        {"06. Cross-thread updates (dc:: ports)", RunLesson06},
-        {"07. Settings-driven panel (SettingsRegistry)", RunLesson07},
-        {"08. Terminal log panel (Log::addSink)", RunLesson08},
+        {"06. Cross-thread updates (pf::dc:: ports)", RunLesson06},
+        {"07. Settings-driven panel (pf::SettingsRegistry)", RunLesson07},
+        {"08. Terminal log panel (pf::Log::addSink)", RunLesson08},
         {"09. Capstone - tabs", RunLesson09},
         {"10. Capstone - resizable split", RunLesson10},
     };
@@ -925,17 +925,17 @@ void RunLesson05()
 
 ---
 
-## Lesson 06 — Cross-thread updates via `dc::` ports
+## Lesson 06 — Cross-thread updates via `pf::dc::` ports
 
-Project ground rule: data crossing threads goes through a `dc::SenderPort`/
+Project ground rule: data crossing threads goes through a `pf::dc::SenderPort`/
 `ReceiverPort` pipeline, never a shared global/queue/condition variable (see
-`include/core/dc/data_container.hpp` and `app/counter_demo.hpp`, the same
+`include/pf/dc/data_container.hpp` and `app/counter_demo.hpp`, the same
 pattern feeding the ImGui app's debug panel instead of a terminal).
 
 This lesson needs its own payload type. Per the project's port convention
-(one payload struct per file, under `include/core/dc/interface/`), that's a
+(one payload struct per file, under `examples/include/demo/dc/`), that's a
 new header — a **fresh, tutorial-only payload** rather than reusing
-`dc::CounterData`, so the tutorial has no dependency on `app/counter_demo.hpp`:
+`demo::CounterData`, so the tutorial has no dependency on `app/counter_demo.hpp`:
 
 ```cpp
 #pragma once
@@ -943,7 +943,7 @@ new header — a **fresh, tutorial-only payload** rather than reusing
 // ---------------------------------------------------------------------------
 // tutorial_tick.hpp — payload type for tutorial/ftxui/examples/lesson_06_dc_ports.cpp.
 //
-// A fresh, tutorial-only payload (rather than reusing dc::CounterData) so the
+// A fresh, tutorial-only payload (rather than reusing demo::CounterData) so the
 // tutorial stays free of any dependency on app/counter_demo.hpp. See
 // data_container.hpp: a port payload must be default-constructible and
 // copy-assignable.
@@ -961,7 +961,7 @@ struct TutorialTick
 } // namespace dc
 ```
 
-A background thread produces `dc::TutorialTick` values and delivers them
+A background thread produces `demo::TutorialTick` values and delivers them
 through the port pipeline; the render loop's `Renderer` lambda calls
 `update()`/`getData()`/`cleanup()` — the same main-loop pattern documented
 in `data_container.hpp` — since that lambda *is* this lesson's one frame hook:
@@ -969,19 +969,19 @@ in `data_container.hpp` — since that lambda *is* this lesson's one frame hook:
 ```cpp
 // ---------------------------------------------------------------------------
 // lesson_06_dc_ports.cpp — feeding a live FTXUI view from a background
-// thread via dc::SenderPort/ReceiverPort.
+// thread via pf::dc::SenderPort/ReceiverPort.
 //
-// Project ground rule: data crossing threads goes through a dc:: port
+// Project ground rule: data crossing threads goes through a pf::dc:: port
 // pipeline, never a shared global/queue/condition variable. See
-// include/core/dc/data_container.hpp and app/counter_demo.hpp (the same
+// include/pf/dc/data_container.hpp and app/counter_demo.hpp (the same
 // pattern feeding the ImGui app's debug panel instead of a terminal).
 // ---------------------------------------------------------------------------
 
 #include "lessons.hpp"
 
-#include "core/dc/data_container.hpp"
-#include "core/dc/interface/tutorial_tick.hpp"
-#include "core/log.hpp"
+#include <pf/dc/data_container.hpp>
+#include <demo/dc/tutorial_tick.hpp>
+#include <pf/log/log.hpp>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
@@ -998,19 +998,19 @@ namespace tutorial
 
 void RunLesson06()
 {
-    static auto log = Log::get("tutorial.lesson06");
+    static auto log = pf::Log::get("tutorial.lesson06");
 
     auto screen = ScreenInteractive::Fullscreen();
 
     // Pool + sender are the producer side; both would normally be file-scope
     // globals so any producer can reach them. Kept local here since the
     // producer thread lives entirely inside this function.
-    dc::Mempool<dc::TutorialTick>    pool(4);
-    dc::SenderPort<dc::TutorialTick> sender;
+    pf::dc::Mempool<demo::TutorialTick>    pool(4);
+    pf::dc::SenderPort<demo::TutorialTick> sender;
     sender.connectMempool(pool);
 
     // Receiver lives at the consumer site — here, the render loop.
-    dc::ReceiverPort<dc::TutorialTick> receiver;
+    pf::dc::ReceiverPort<demo::TutorialTick> receiver;
     receiver.connect(sender);
 
     std::atomic<bool> running{true};
@@ -1025,7 +1025,7 @@ void RunLesson06()
                 // reserve() → fill → deliver(); reserve() returns nullptr when
                 // the pool is exhausted (every slot still held by a receiver) —
                 // drop the send rather than block the producer.
-                if (dc::TutorialTick* slot = sender.reserve())
+                if (demo::TutorialTick* slot = sender.reserve())
                 {
                     slot->tick           = tick++;
                     slot->elapsedSeconds = std::chrono::duration<double>(clock::now() - start).count();
@@ -1035,7 +1035,7 @@ void RunLesson06()
                 std::this_thread::sleep_for(std::chrono::milliseconds(150));
             }
         });
-    log->info("dc:: producer thread started");
+    log->info("pf::dc:: producer thread started");
 
     auto renderer = Renderer(
         [&]
@@ -1045,7 +1045,7 @@ void RunLesson06()
             // happen here since this lambda IS the render loop's one frame hook.
             receiver.update();
             Element body;
-            if (const dc::TutorialTick* d = receiver.getData())
+            if (const demo::TutorialTick* d = receiver.getData())
             {
                 body = vbox({
                     text("tick    : " + std::to_string(d->tick)),
@@ -1059,8 +1059,8 @@ void RunLesson06()
             receiver.cleanup();
 
             return vbox({
-                       text("Cross-thread updates via dc:: ports") | bold,
-                       text("A background thread posts a dc::TutorialTick every 150ms") | dim,
+                       text("Cross-thread updates via pf::dc:: ports") | bold,
+                       text("A background thread posts a demo::TutorialTick every 150ms") | dim,
                        separator(),
                        body,
                        separator(),
@@ -1085,7 +1085,7 @@ void RunLesson06()
 
     running.store(false);
     producer.join();
-    log->info("dc:: producer thread stopped");
+    log->info("pf::dc:: producer thread stopped");
 }
 
 } // namespace tutorial
@@ -1095,33 +1095,33 @@ void RunLesson06()
 
 ## Lesson 07 — Settings-driven panel
 
-A terminal analog of `SettingsEditor` (`include/settings/settings_editor.hpp`):
-walk `SettingsRegistry::getItems()` and, for the selected item, its JSON
-fields — rendering a widget per field. `SettingsEditor` does this by
+A terminal analog of `pf::SettingsEditor` (`include/pf/ui/settings_editor.hpp`):
+walk `pf::SettingsRegistry::getItems()` and, for the selected item, its JSON
+fields — rendering a widget per field. `pf::SettingsEditor` does this by
 redrawing ImGui widgets from scratch every frame; FTXUI components are
 *persistent*, so changing which item is selected means explicitly
 rebuilding the field editor's `Component` subtree (`rebuild()` below).
 
-This lesson needs a `SettingsItem<T>` to point at. It's pulled into its own
+This lesson needs a `pf::SettingsItem<T>` to point at. It's pulled into its own
 tiny header (rather than declared inline in the lesson file) so both this
 lesson and the capstones (09/10) register the *same* `inline` global,
 instead of two separately-registered structs racing for the
-`"TutorialUiSettings"` key — `SettingsRegistry::add()` ignores (and warns
+`"TutorialUiSettings"` key — `pf::SettingsRegistry::add()` ignores (and warns
 on) duplicate keys:
 
 ```cpp
 #pragma once
 
 // ---------------------------------------------------------------------------
-// tutorial_settings.hpp — the SettingsItem<T> shared by lesson 07 and the
+// tutorial_settings.hpp — the pf::SettingsItem<T> shared by lesson 07 and the
 // capstones (09/10). Pulled into its own header (rather than declared inline
 // in lesson_07_settings_panel.cpp) so both TUs register the exact same
 // `inline` global instead of two separately-registered structs racing for
 // the "TutorialUiSettings" key — see settings/settings_registry.hpp's
-// SettingsRegistry::add(), which ignores (and warns on) duplicate keys.
+// pf::SettingsRegistry::add(), which ignores (and warns on) duplicate keys.
 // ---------------------------------------------------------------------------
 
-#include "settings/settings_item.hpp"
+#include <pf/settings/settings_item.hpp>
 
 #include <nlohmann/json.hpp>
 #include <string>
@@ -1139,7 +1139,7 @@ struct TutorialUiSettings
     NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(TutorialUiSettings, showBorder, refreshMs, volume, greeting)
 };
 
-inline SettingsItem<TutorialUiSettings> g_tutorialUi{"TutorialUiSettings"};
+inline pf::SettingsItem<TutorialUiSettings> g_tutorialUi{"TutorialUiSettings"};
 
 } // namespace tutorial
 ```
@@ -1167,10 +1167,10 @@ Two real bugs worth knowing about, both fixed in the code below:
 
 ```cpp
 // ---------------------------------------------------------------------------
-// lesson_07_settings_panel.cpp — a terminal analog of SettingsEditor.
+// lesson_07_settings_panel.cpp — a terminal analog of pf::SettingsEditor.
 //
-// SettingsEditor (include/settings/settings_editor.hpp) walks
-// SettingsRegistry::getItems() and, for the selected item, its JSON fields —
+// pf::SettingsEditor (include/pf/ui/settings_editor.hpp) walks
+// pf::SettingsRegistry::getItems() and, for the selected item, its JSON fields —
 // rendering an ImGui widget per field. This lesson does the same walk but
 // builds FTXUI components instead. Unlike ImGui (redraw-from-scratch every
 // frame), FTXUI components are persistent, so changing which item is
@@ -1190,7 +1190,7 @@ Two real bugs worth knowing about, both fixed in the code below:
 #include "lessons.hpp"
 #include "tutorial_settings.hpp"
 
-#include "settings/settings_registry.hpp"
+#include <pf/settings/settings_registry.hpp>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
@@ -1226,7 +1226,7 @@ void RunLesson07()
 {
     auto screen = ScreenInteractive::Fullscreen();
 
-    auto&                    registry     = SettingsRegistry::instance();
+    auto&                    registry     = pf::SettingsRegistry::instance();
     const std::string        autoSavePath = "tutorial_settings.xml";
     std::vector<std::string> itemNames;
     for (const auto& [name, entry] : registry.getItems())
@@ -1413,7 +1413,7 @@ void RunLesson07()
 
             return vbox({
                        text("Settings-driven panel") | bold,
-                       text("Registered SettingsItem<T> instances, live-edited via SettingsRegistry") | dim,
+                       text("Registered pf::SettingsItem<T> instances, live-edited via pf::SettingsRegistry") | dim,
                        separator(),
                        text("Items:") | bold,
                        itemMenu->Render() | frame | size(HEIGHT, EQUAL, 3),
@@ -1450,32 +1450,32 @@ void RunLesson07()
 
 ## Lesson 08 — Terminal log panel
 
-A terminal analog of `ImGuiLogSink_mt` (`include/core/imgui_log_sink.hpp`):
+A terminal analog of `pf::ImGuiLogSink_mt` (`include/pf/ui/imgui_log_sink.hpp`):
 buffer spdlog messages in a custom sink, draw them each render.
 `FtxuiLogSink` reuses the exact same `sink_it_()`/`formatter_` pattern as
-`libs/core/imgui_log_sink.cpp`, just building `ftxui::Element`s instead of
+`src/pf/ui/imgui_log_sink.cpp`, just building `ftxui::Element`s instead of
 issuing ImGui draw calls.
 
-One thing to watch: `Log::get()` before `Log::init()` returns a logger with
+One thing to watch: `pf::Log::get()` before `pf::Log::init()` returns a logger with
 zero sinks and the registry's default level (`info`) — so `trace`/`debug`
 calls go nowhere until you explicitly `log->set_level(spdlog::level::trace)`
-and `sink->set_level(spdlog::level::trace)` (`Log::addSink()` defaults a new
-sink to the *current* global level, which is `info` if `Log::init()` was
+and `sink->set_level(spdlog::level::trace)` (`pf::Log::addSink()` defaults a new
+sink to the *current* global level, which is `info` if `pf::Log::init()` was
 never called).
 
 ```cpp
 // ---------------------------------------------------------------------------
-// lesson_08_log_panel.cpp — a terminal analog of ImGuiLogSink_mt.
+// lesson_08_log_panel.cpp — a terminal analog of pf::ImGuiLogSink_mt.
 //
-// include/core/imgui_log_sink.hpp buffers spdlog messages and draws them as
+// include/pf/ui/imgui_log_sink.hpp buffers spdlog messages and draws them as
 // ImGui text each frame. FtxuiLogSink below does the same buffering — same
-// sink_it_()/formatter_ pattern, see libs/core/imgui_log_sink.cpp — but hands
+// sink_it_()/formatter_ pattern, see src/pf/ui/imgui_log_sink.cpp — but hands
 // out a snapshot for an FTXUI Renderer to turn into Elements instead.
 // ---------------------------------------------------------------------------
 
 #include "lessons.hpp"
 
-#include "core/log.hpp"
+#include <pf/log/log.hpp>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
@@ -1572,17 +1572,17 @@ void RunLesson08()
     auto screen = ScreenInteractive::Fullscreen();
 
     // Wired once regardless of how many times this lesson is re-entered from
-    // the picker — Log::get()/addSink() are idempotent-unsafe to repeat.
+    // the picker — pf::Log::get()/addSink() are idempotent-unsafe to repeat.
     static auto sink = []
     {
         auto s   = std::make_shared<FtxuiLogSink>(12);
-        auto log = Log::get("tutorial.lesson08");
+        auto log = pf::Log::get("tutorial.lesson08");
         log->set_level(spdlog::level::trace);
-        Log::addSink(s);
-        s->set_level(spdlog::level::trace); // Log::addSink() defaults new sinks to the global level (info)
+        pf::Log::addSink(s);
+        s->set_level(spdlog::level::trace); // pf::Log::addSink() defaults new sinks to the global level (info)
         return s;
     }();
-    static auto log = Log::get("tutorial.lesson08");
+    static auto log = pf::Log::get("tutorial.lesson08");
 
     std::atomic<bool> running{true};
     std::thread       ticker(
@@ -1658,8 +1658,8 @@ void RunLesson08()
 
 ## Shared capstone panels
 
-Lessons 09 and 10 both combine the exact same three techniques (dc:: ports,
-SettingsRegistry, Log::addSink) — just arranged differently (tabs vs. a
+Lessons 09 and 10 both combine the exact same three techniques (pf::dc:: ports,
+pf::SettingsRegistry, pf::Log::addSink) — just arranged differently (tabs vs. a
 resizable split). Rather than duplicate ~300 lines twice, `capstone_panels.hpp`/
 `.cpp` wraps each as an RAII class exposing a ready-to-compose
 `ftxui::Component`: `DataPanel`, `LogPanel`, `SettingsPanel`. Each owns any
@@ -1678,8 +1678,8 @@ returning a bare `Component` after its own stack frame ends.
 #pragma once
 
 // ---------------------------------------------------------------------------
-// capstone_panels.hpp — the three lesson 06/07/08 techniques (dc:: ports,
-// SettingsRegistry, Log::addSink), each wrapped as an RAII class exposing a
+// capstone_panels.hpp — the three lesson 06/07/08 techniques (pf::dc:: ports,
+// pf::SettingsRegistry, pf::Log::addSink), each wrapped as an RAII class exposing a
 // ready-to-compose ftxui::Component. Shared by lesson_09 (tabs) and
 // lesson_10 (split) so neither has to re-derive this logic — see those two
 // lessons for what's actually new: Container::Tab and ResizableSplit.
@@ -1689,9 +1689,9 @@ returning a bare `Component` after its own stack frame ends.
 // duration of its ScreenInteractive::Loop().
 // ---------------------------------------------------------------------------
 
-#include "core/dc/data_container.hpp"
-#include "core/dc/interface/tutorial_tick.hpp"
-#include "core/log.hpp"
+#include <pf/dc/data_container.hpp>
+#include <demo/dc/tutorial_tick.hpp>
+#include <pf/log/log.hpp>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
@@ -1709,7 +1709,7 @@ returning a bare `Component` after its own stack frame ends.
 namespace tutorial
 {
 
-// -- Live dc:: data panel (lesson 06) ----------------------------------------
+// -- Live pf::dc:: data panel (lesson 06) ----------------------------------------
 class DataPanel
 {
 public:
@@ -1725,9 +1725,9 @@ public:
     }
 
 private:
-    dc::Mempool<dc::TutorialTick>      m_pool{4};
-    dc::SenderPort<dc::TutorialTick>   m_sender;
-    dc::ReceiverPort<dc::TutorialTick> m_receiver;
+    pf::dc::Mempool<demo::TutorialTick>      m_pool{4};
+    pf::dc::SenderPort<demo::TutorialTick>   m_sender;
+    pf::dc::ReceiverPort<demo::TutorialTick> m_receiver;
     std::atomic<bool>                  m_running{true};
     std::thread                        m_thread;
     ftxui::Component                   m_component;
@@ -1826,7 +1826,7 @@ private:
 #include "capstone_panels.hpp"
 #include "tutorial_settings.hpp"
 
-#include "settings/settings_registry.hpp"
+#include <pf/settings/settings_registry.hpp>
 
 #include <ftxui/component/component_options.hpp>
 #include <ftxui/dom/elements.hpp>
@@ -1856,7 +1856,7 @@ DataPanel::DataPanel(ScreenInteractive& screen)
             int        tick  = 0;
             while (m_running.load())
             {
-                if (dc::TutorialTick* slot = m_sender.reserve())
+                if (demo::TutorialTick* slot = m_sender.reserve())
                 {
                     slot->tick           = tick++;
                     slot->elapsedSeconds = std::chrono::duration<double>(clock::now() - start).count();
@@ -1872,7 +1872,7 @@ DataPanel::DataPanel(ScreenInteractive& screen)
         {
             m_receiver.update();
             Element body;
-            if (const dc::TutorialTick* d = m_receiver.getData())
+            if (const demo::TutorialTick* d = m_receiver.getData())
             {
                 body = vbox({
                     text("tick    : " + std::to_string(d->tick)),
@@ -1956,9 +1956,9 @@ Color LevelColor(spdlog::level::level_enum level)
 LogPanel::LogPanel(ScreenInteractive& screen)
 {
     m_sink = std::make_shared<FtxuiLogSink>(10);
-    m_log  = Log::get("tutorial.capstone");
+    m_log  = pf::Log::get("tutorial.capstone");
     m_log->set_level(spdlog::level::trace);
-    Log::addSink(m_sink);
+    pf::Log::addSink(m_sink);
     m_sink->set_level(spdlog::level::trace);
 
     m_thread = std::thread(
@@ -2017,7 +2017,7 @@ SettingsPanel::SettingsPanel(std::string autoSavePath)
     : m_autoSavePath(std::move(autoSavePath))
     , m_root(Container::Vertical({}))
 {
-    auto& registry = SettingsRegistry::instance();
+    auto& registry = pf::SettingsRegistry::instance();
     for (const auto& [name, entry] : registry.getItems())
         m_itemNames.push_back(name);
 
@@ -2027,12 +2027,12 @@ SettingsPanel::SettingsPanel(std::string autoSavePath)
     itemMenuOption.on_change = [this] { rebuild(); };
     m_itemMenu               = Menu(itemMenuOption);
 
-    m_saveButton   = Button("Save", [this] { SettingsRegistry::instance().saveXml(m_autoSavePath); });
+    m_saveButton   = Button("Save", [this] { pf::SettingsRegistry::instance().saveXml(m_autoSavePath); });
     m_reloadButton = Button(
         "Reload",
         [this]
         {
-            SettingsRegistry::instance().loadXml(m_autoSavePath);
+            pf::SettingsRegistry::instance().loadXml(m_autoSavePath);
             rebuild();
         });
     m_resetButton = Button(
@@ -2041,7 +2041,7 @@ SettingsPanel::SettingsPanel(std::string autoSavePath)
         {
             if (!m_itemNames.empty())
             {
-                SettingsRegistry::instance().resetItem(m_itemNames[m_selectedItem]);
+                pf::SettingsRegistry::instance().resetItem(m_itemNames[m_selectedItem]);
                 rebuild();
             }
         });
@@ -2069,7 +2069,7 @@ SettingsPanel::SettingsPanel(std::string autoSavePath)
 
 void SettingsPanel::rebuild()
 {
-    auto& registry = SettingsRegistry::instance();
+    auto& registry = pf::SettingsRegistry::instance();
     m_root->DetachAllChildren();
     m_mirrors.clear();
     m_fieldWidgets.clear();
@@ -2129,7 +2129,7 @@ void SettingsPanel::rebuild()
             {
                 CheckboxOption opt;
                 opt.on_change = [itemName, &m]
-                { SettingsRegistry::instance().setItemValue<bool>(itemName, m.key, m.boolVal); };
+                { pf::SettingsRegistry::instance().setItemValue<bool>(itemName, m.key, m.boolVal); };
                 // FTXUI 5.0.0 only implements the (label, checked, option) overload of
                 // Checkbox(), not the CheckboxOption-only one declared in its header.
                 field = Checkbox(m.key, &m.boolVal, opt);
@@ -2143,7 +2143,7 @@ void SettingsPanel::rebuild()
                     try
                     {
                         int parsed = std::stoi(m.textVal);
-                        SettingsRegistry::instance().setItemValue<int>(itemName, m.key, parsed);
+                        pf::SettingsRegistry::instance().setItemValue<int>(itemName, m.key, parsed);
                         // Re-derive the display text from the parsed value — otherwise
                         // e.g. "12abc" stays on screen even though 12 was what committed.
                         m.textVal = std::to_string(parsed);
@@ -2163,7 +2163,7 @@ void SettingsPanel::rebuild()
                     try
                     {
                         float parsed = std::stof(m.textVal);
-                        SettingsRegistry::instance().setItemValue<float>(itemName, m.key, parsed);
+                        pf::SettingsRegistry::instance().setItemValue<float>(itemName, m.key, parsed);
                         m.textVal = std::to_string(parsed);
                     }
                     catch (const std::exception&)
@@ -2177,7 +2177,7 @@ void SettingsPanel::rebuild()
                 InputOption opt;
                 opt.content  = &m.textVal;
                 opt.on_enter = [itemName, &m]
-                { SettingsRegistry::instance().setItemValue<std::string>(itemName, m.key, m.textVal); };
+                { pf::SettingsRegistry::instance().setItemValue<std::string>(itemName, m.key, m.textVal); };
                 field = labeledInput(m.key, opt);
             }
 
@@ -2216,7 +2216,7 @@ not the Tab *key*.
 
 ```cpp
 // ---------------------------------------------------------------------------
-// lesson_09_capstone_tabs.cpp — combine the dc:: data, settings, and log
+// lesson_09_capstone_tabs.cpp — combine the pf::dc:: data, settings, and log
 // panels (see capstone_panels.hpp) into one app via Container::Tab: one
 // child visible at a time, picked by an index.
 // ---------------------------------------------------------------------------
@@ -2402,7 +2402,7 @@ these lessons — useful if you extend the tutorial or build your own panels:
    whatever event it receives to the active child — so it composes fine
    with the panels above; the trapping above happens *inside* whichever
    panel currently has focus, not because of `Container::Tab`.
-5. **`Log::get()` before `Log::init()`** returns a logger with no sinks and
+5. **`pf::Log::get()` before `pf::Log::init()`** returns a logger with no sinks and
    the registry's default (`info`) level — `trace`/`debug` calls are
    silently dropped until you raise the logger's *and* the sink's level
    explicitly (see lesson 08).

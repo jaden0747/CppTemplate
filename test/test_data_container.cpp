@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // test_data_container.cpp — Unit tests for Mempool, SenderPort, ReceiverPort
 // ---------------------------------------------------------------------------
-#include "core/dc/data_container.hpp"
+#include <pf/dc/data_container.hpp>
 
 #include <gtest/gtest.h>
 
@@ -10,7 +10,7 @@
 
 TEST(Mempool, AcquireAndRelease)
 {
-    dc::Mempool<int> pool(3);
+    pf::dc::Mempool<int> pool(3);
     EXPECT_EQ(pool.poolCount(), 3u);
 
     auto* buf = pool.acquire();
@@ -23,7 +23,7 @@ TEST(Mempool, AcquireAndRelease)
 
 TEST(Mempool, ExhaustsWhenAllHeld)
 {
-    dc::Mempool<int> pool(2);
+    pf::dc::Mempool<int> pool(2);
 
     auto* b1 = pool.acquire();
     auto* b2 = pool.acquire();
@@ -42,9 +42,9 @@ TEST(Mempool, ExhaustsWhenAllHeld)
 
 TEST(SenderReceiver, BasicDelivery)
 {
-    dc::Mempool<int>      pool(4);
-    dc::SenderPort<int>   sender;
-    dc::ReceiverPort<int> receiver;
+    pf::dc::Mempool<int>      pool(4);
+    pf::dc::SenderPort<int>   sender;
+    pf::dc::ReceiverPort<int> receiver;
 
     sender.connectMempool(pool);
     receiver.connect(sender);
@@ -66,9 +66,9 @@ TEST(SenderReceiver, BasicDelivery)
 
 TEST(SenderReceiver, MultipleReceivers)
 {
-    dc::Mempool<int>      pool(4);
-    dc::SenderPort<int>   sender;
-    dc::ReceiverPort<int> r1, r2;
+    pf::dc::Mempool<int>      pool(4);
+    pf::dc::SenderPort<int>   sender;
+    pf::dc::ReceiverPort<int> r1, r2;
 
     sender.connectMempool(pool);
     r1.connect(sender);
@@ -86,9 +86,9 @@ TEST(SenderReceiver, MultipleReceivers)
 
 TEST(SenderReceiver, LatestWins)
 {
-    dc::Mempool<int>      pool(4);
-    dc::SenderPort<int>   sender;
-    dc::ReceiverPort<int> receiver;
+    pf::dc::Mempool<int>      pool(4);
+    pf::dc::SenderPort<int>   sender;
+    pf::dc::ReceiverPort<int> receiver;
 
     sender.connectMempool(pool);
     receiver.connect(sender);
@@ -109,9 +109,9 @@ TEST(SenderReceiver, LatestWins)
 
 TEST(SenderReceiver, ThreadedDelivery)
 {
-    dc::Mempool<int>      pool(8);
-    dc::SenderPort<int>   sender;
-    dc::ReceiverPort<int> receiver;
+    pf::dc::Mempool<int>      pool(8);
+    pf::dc::SenderPort<int>   sender;
+    pf::dc::ReceiverPort<int> receiver;
 
     sender.connectMempool(pool);
     receiver.connect(sender);

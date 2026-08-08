@@ -5,11 +5,11 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 
-#include "settings/settings_item.hpp"
-#include "settings/command_registry.hpp"
-#include "settings/examples/app_config.hpp"
-#include "settings/examples/render_settings.hpp"
-#include "settings/examples/network_config.hpp"
+#include <pf/settings/settings_item.hpp>
+#include <pf/cli/command_registry.hpp>
+#include <demo/app_config.hpp>
+#include <demo/render_settings.hpp>
+#include <demo/network_config.hpp>
 
 #include <cli/cli.h>
 #include <cli/standaloneasioscheduler.h>
@@ -19,8 +19,8 @@
 #include <iostream>
 #include <string>
 
-// Settings globals (g_app, g_render, g_network) are defined as inline variables
-// in their example headers and self-register at static-init time.
+// Settings globals (demo::g_app, demo::g_render, demo::g_network) are defined as
+// inline variables in their example headers and self-register at static-init time.
 
 int main(int argc, char* argv[])
 {
@@ -31,15 +31,15 @@ int main(int argc, char* argv[])
             port = static_cast<uint16_t>(std::stoi(argv[i + 1]));
     }
 
-    SettingsRegistry::instance().loadXml("settings.xml");
+    pf::SettingsRegistry::instance().loadXml("settings.xml");
     std::cout << "Settings loaded from settings.xml\n";
 
-    auto rootMenu = buildRootMenu();
+    auto rootMenu = pf::buildRootMenu();
     rootMenu->Insert(
         "save",
         [](std::ostream& out, const std::string& filename)
         {
-            SettingsRegistry::instance().saveXml(filename);
+            pf::SettingsRegistry::instance().saveXml(filename);
             out << "Saved to \"" << filename << "\"\n";
         },
         "Save all settings to an XML file");

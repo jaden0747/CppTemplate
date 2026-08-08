@@ -1,8 +1,8 @@
 #pragma once
 
 // ---------------------------------------------------------------------------
-// capstone_panels.hpp — the three lesson 06/07/08 techniques (dc:: ports,
-// SettingsRegistry, Log::addSink), each wrapped as an RAII class exposing a
+// capstone_panels.hpp — the three lesson 06/07/08 techniques (pf::dc:: ports,
+// pf::SettingsRegistry, pf::Log::addSink), each wrapped as an RAII class exposing a
 // ready-to-compose ftxui::Component. Shared by lesson_09 (tabs) and
 // lesson_10 (split) so neither has to re-derive this logic — see those two
 // lessons for what's actually new: Container::Tab and ResizableSplit.
@@ -12,9 +12,9 @@
 // duration of its ScreenInteractive::Loop().
 // ---------------------------------------------------------------------------
 
-#include "core/dc/data_container.hpp"
-#include "core/dc/interface/tutorial_tick.hpp"
-#include "core/log.hpp"
+#include <pf/dc/data_container.hpp>
+#include <demo/dc/tutorial_tick.hpp>
+#include <pf/log/log.hpp>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
@@ -32,7 +32,7 @@
 namespace tutorial
 {
 
-// -- Live dc:: data panel (lesson 06) ----------------------------------------
+// -- Live pf::dc:: data panel (lesson 06) ----------------------------------------
 class DataPanel
 {
 public:
@@ -48,9 +48,9 @@ public:
     }
 
 private:
-    dc::Mempool<dc::TutorialTick>      m_pool{4};
-    dc::SenderPort<dc::TutorialTick>   m_sender;
-    dc::ReceiverPort<dc::TutorialTick> m_receiver;
+    pf::dc::Mempool<demo::TutorialTick>      m_pool{4};
+    pf::dc::SenderPort<demo::TutorialTick>   m_sender;
+    pf::dc::ReceiverPort<demo::TutorialTick> m_receiver;
     std::atomic<bool>                  m_running{true};
     std::thread                        m_thread;
     ftxui::Component                   m_component;

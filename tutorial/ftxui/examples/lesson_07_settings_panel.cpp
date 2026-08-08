@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
-// lesson_07_settings_panel.cpp — a terminal analog of SettingsEditor.
+// lesson_07_settings_panel.cpp — a terminal analog of pf::SettingsEditor.
 //
-// SettingsEditor (include/settings/settings_editor.hpp) walks
-// SettingsRegistry::getItems() and, for the selected item, its JSON fields —
+// pf::SettingsEditor (include/pf/ui/settings_editor.hpp) walks
+// pf::SettingsRegistry::getItems() and, for the selected item, its JSON fields —
 // rendering an ImGui widget per field. This lesson does the same walk but
 // builds FTXUI components instead. Unlike ImGui (redraw-from-scratch every
 // frame), FTXUI components are persistent, so changing which item is
@@ -22,7 +22,7 @@
 #include "lessons.hpp"
 #include "tutorial_settings.hpp"
 
-#include "settings/settings_registry.hpp"
+#include <pf/settings/settings_registry.hpp>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
@@ -58,7 +58,7 @@ void RunLesson07()
 {
     auto screen = ScreenInteractive::Fullscreen();
 
-    auto&                    registry     = SettingsRegistry::instance();
+    auto&                    registry     = pf::SettingsRegistry::instance();
     const std::string        autoSavePath = "tutorial_settings.xml";
     std::vector<std::string> itemNames;
     for (const auto& [name, entry] : registry.getItems())
@@ -245,7 +245,7 @@ void RunLesson07()
 
             return vbox({
                        text("Settings-driven panel") | bold,
-                       text("Registered SettingsItem<T> instances, live-edited via SettingsRegistry") | dim,
+                       text("Registered pf::SettingsItem<T> instances, live-edited via pf::SettingsRegistry") | dim,
                        separator(),
                        text("Items:") | bold,
                        itemMenu->Render() | frame | size(HEIGHT, EQUAL, 3),

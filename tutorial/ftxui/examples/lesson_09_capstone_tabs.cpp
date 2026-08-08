@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// lesson_09_capstone_tabs.cpp — combine the dc:: data, settings, and log
+// lesson_09_capstone_tabs.cpp — combine the pf::dc:: data, settings, and log
 // panels (see capstone_panels.hpp) into one app via Container::Tab: one
 // child visible at a time, picked by an index.
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 #include "capstone_panels.hpp"
 #include "tutorial_settings.hpp"
 
-#include "settings/settings_registry.hpp"
+#include <pf/settings/settings_registry.hpp>
 
 #include <ftxui/component/component_options.hpp>
 #include <ftxui/dom/elements.hpp>
@@ -31,7 +31,7 @@ DataPanel::DataPanel(ScreenInteractive& screen)
             int        tick  = 0;
             while (m_running.load())
             {
-                if (dc::TutorialTick* slot = m_sender.reserve())
+                if (demo::TutorialTick* slot = m_sender.reserve())
                 {
                     slot->tick           = tick++;
                     slot->elapsedSeconds = std::chrono::duration<double>(clock::now() - start).count();
@@ -47,7 +47,7 @@ DataPanel::DataPanel(ScreenInteractive& screen)
         {
             m_receiver.update();
             Element body;
-            if (const dc::TutorialTick* d = m_receiver.getData())
+            if (const demo::TutorialTick* d = m_receiver.getData())
             {
                 body = vbox({
                     text("tick    : " + std::to_string(d->tick)),
@@ -131,9 +131,9 @@ Color LevelColor(spdlog::level::level_enum level)
 LogPanel::LogPanel(ScreenInteractive& screen)
 {
     m_sink = std::make_shared<FtxuiLogSink>(10);
-    m_log  = Log::get("tutorial.capstone");
+    m_log  = pf::Log::get("tutorial.capstone");
     m_log->set_level(spdlog::level::trace);
-    Log::addSink(m_sink);
+    pf::Log::addSink(m_sink);
     m_sink->set_level(spdlog::level::trace);
 
     m_thread = std::thread(
@@ -192,7 +192,7 @@ SettingsPanel::SettingsPanel(std::string autoSavePath)
     : m_autoSavePath(std::move(autoSavePath))
     , m_root(Container::Vertical({}))
 {
-    auto& registry = SettingsRegistry::instance();
+    auto& registry = pf::SettingsRegistry::instance();
     for (const auto& [name, entry] : registry.getItems())
         m_itemNames.push_back(name);
 
@@ -202,12 +202,12 @@ SettingsPanel::SettingsPanel(std::string autoSavePath)
     itemMenuOption.on_change = [this] { rebuild(); };
     m_itemMenu               = Menu(itemMenuOption);
 
-    m_saveButton   = Button("Save", [this] { SettingsRegistry::instance().saveXml(m_autoSavePath); });
+    m_saveButton   = Button("Save", [this] { pf::SettingsRegistry::instance().saveXml(m_autoSavePath); });
     m_reloadButton = Button(
         "Reload",
         [this]
         {
-            SettingsRegistry::instance().loadXml(m_autoSavePath);
+            pf::SettingsRegistry::instance().loadXml(m_autoSavePath);
             rebuild();
         });
     m_resetButton = Button(
@@ -216,7 +216,7 @@ SettingsPanel::SettingsPanel(std::string autoSavePath)
         {
             if (!m_itemNames.empty())
             {
-                SettingsRegistry::instance().resetItem(m_itemNames[m_selectedItem]);
+                pf::SettingsRegistry::instance().resetItem(m_itemNames[m_selectedItem]);
                 rebuild();
             }
         });
@@ -244,7 +244,7 @@ SettingsPanel::SettingsPanel(std::string autoSavePath)
 
 void SettingsPanel::rebuild()
 {
-    auto& registry = SettingsRegistry::instance();
+    auto& registry = pf::SettingsRegistry::instance();
     m_root->DetachAllChildren();
     m_mirrors.clear();
     m_fieldWidgets.clear();
@@ -304,7 +304,7 @@ void SettingsPanel::rebuild()
             {
                 CheckboxOption opt;
                 opt.on_change = [itemName, &m]
-                { SettingsRegistry::instance().setItemValue<bool>(itemName, m.key, m.boolVal); };
+                { pf::SettingsRegistry::instance().setItemValue<bool>(itemName, m.key, m.boolVal); };
                 // FTXUI 5.0.0 only implements the (label, checked, option) overload of
                 // Checkbox(), not the CheckboxOption-only one declared in its header.
                 field = Checkbox(m.key, &m.boolVal, opt);
@@ -318,7 +318,7 @@ void SettingsPanel::rebuild()
                     try
                     {
                         int parsed = std::stoi(m.textVal);
-                        SettingsRegistry::instance().setItemValue<int>(itemName, m.key, parsed);
+                        pf::SettingsRegistry::instance().setItemValue<int>(itemName, m.key, parsed);
                         // Re-derive the display text from the parsed value — otherwise
                         // e.g. "12abc" stays on screen even though 12 was what committed.
                         m.textVal = std::to_string(parsed);
@@ -338,7 +338,7 @@ void SettingsPanel::rebuild()
                     try
                     {
                         float parsed = std::stof(m.textVal);
-                        SettingsRegistry::instance().setItemValue<float>(itemName, m.key, parsed);
+                        pf::SettingsRegistry::instance().setItemValue<float>(itemName, m.key, parsed);
                         m.textVal = std::to_string(parsed);
                     }
                     catch (const std::exception&)
@@ -352,7 +352,7 @@ void SettingsPanel::rebuild()
                 InputOption opt;
                 opt.content  = &m.textVal;
                 opt.on_enter = [itemName, &m]
-                { SettingsRegistry::instance().setItemValue<std::string>(itemName, m.key, m.textVal); };
+                { pf::SettingsRegistry::instance().setItemValue<std::string>(itemName, m.key, m.textVal); };
                 field = labeledInput(m.key, opt);
             }
 

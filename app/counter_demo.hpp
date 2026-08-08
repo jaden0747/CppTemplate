@@ -4,8 +4,9 @@
 // counter_demo.hpp — CounterDemo: self-contained Sender/Receiver ports demo.
 //
 // A background thread produces an incrementing counter and ships it to the main
-// thread through a dc::SenderPort / dc::ReceiverPort pipeline (per the project
-// ground rule that inter-thread data flows through ports, never shared globals).
+// thread through a pf::dc::SenderPort / pf::dc::ReceiverPort pipeline (per the
+// project ground rule that inter-thread data flows through ports, never shared
+// globals).
 //
 //   CounterDemo demo;
 //   demo.start();                 // launch producer thread
@@ -18,9 +19,9 @@
 //   demo.stop();                  // join (also happens in destructor)
 // ---------------------------------------------------------------------------
 
-#include "core/dc/data_container.hpp"
-#include "core/dc/interface/counter_data.hpp"
-#include "core/log.hpp"
+#include <pf/dc/data_container.hpp>
+#include <demo/dc/counter_data.hpp>
+#include <pf/log/log.hpp>
 
 #include <imgui.h>
 
@@ -31,7 +32,7 @@
 class CounterDemo
 {
 public:
-    using CounterData = dc::CounterData;
+    using CounterData = demo::CounterData;
 
     CounterDemo() { m_receiver.connect(m_sender); }
     ~CounterDemo() { stop(); }
@@ -78,7 +79,7 @@ private:
     void run()
     {
         m_sender.connectMempool(m_pool);
-        auto log = Log::get("ports");
+        auto log = pf::Log::get("ports");
         log->info("Background sender started");
 
         int count = 0;
@@ -98,9 +99,9 @@ private:
         log->info("Background sender stopped");
     }
 
-    dc::Mempool<CounterData>      m_pool{4};
-    dc::SenderPort<CounterData>   m_sender;
-    dc::ReceiverPort<CounterData> m_receiver;
-    std::atomic<bool>             m_running{false};
-    std::thread                   m_thread;
+    pf::dc::Mempool<CounterData>      m_pool{4};
+    pf::dc::SenderPort<CounterData>   m_sender;
+    pf::dc::ReceiverPort<CounterData> m_receiver;
+    std::atomic<bool>                 m_running{false};
+    std::thread                       m_thread;
 };

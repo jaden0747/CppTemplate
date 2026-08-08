@@ -1,15 +1,15 @@
 // ---------------------------------------------------------------------------
-// lesson_08_log_panel.cpp — a terminal analog of ImGuiLogSink_mt.
+// lesson_08_log_panel.cpp — a terminal analog of pf::ImGuiLogSink_mt.
 //
-// include/core/imgui_log_sink.hpp buffers spdlog messages and draws them as
+// include/pf/ui/imgui_log_sink.hpp buffers spdlog messages and draws them as
 // ImGui text each frame. FtxuiLogSink below does the same buffering — same
-// sink_it_()/formatter_ pattern, see libs/core/imgui_log_sink.cpp — but hands
+// sink_it_()/formatter_ pattern, see src/pf/ui/imgui_log_sink.cpp — but hands
 // out a snapshot for an FTXUI Renderer to turn into Elements instead.
 // ---------------------------------------------------------------------------
 
 #include "lessons.hpp"
 
-#include "core/log.hpp"
+#include <pf/log/log.hpp>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
@@ -17,6 +17,7 @@
 
 #include <spdlog/sinks/base_sink.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <deque>
@@ -96,6 +97,9 @@ Color LevelColor(spdlog::level::level_enum level)
     }
 }
 
+constexpr int kVisibleLines = 12;
+constexpr int kMaxEntries   = 500;
+
 } // namespace
 
 namespace tutorial
@@ -106,17 +110,17 @@ void RunLesson08()
     auto screen = ScreenInteractive::Fullscreen();
 
     // Wired once regardless of how many times this lesson is re-entered from
-    // the picker — Log::get()/addSink() are idempotent-unsafe to repeat.
+    // the picker — pf::Log::get()/addSink() are idempotent-unsafe to repeat.
     static auto sink = []
     {
-        auto s   = std::make_shared<FtxuiLogSink>(12);
-        auto log = Log::get("tutorial.lesson08");
+        auto s   = std::make_shared<FtxuiLogSink>(kMaxEntries);
+        auto log = pf::Log::get("tutorial.lesson08");
         log->set_level(spdlog::level::trace);
-        Log::addSink(s);
-        s->set_level(spdlog::level::trace); // Log::addSink() defaults new sinks to the global level (info)
+        pf::Log::addSink(s);
+        s->set_level(spdlog::level::trace); // pf::Log::addSink() defaults new sinks to the global level (info)
         return s;
     }();
-    static auto log = Log::get("tutorial.lesson08");
+    static auto log = pf::Log::get("tutorial.lesson08");
 
     std::atomic<bool> running{true};
     std::thread       ticker(
@@ -149,18 +153,38 @@ void RunLesson08()
             }
         });
 
+    // Lines scrolled up from the bottom; 0 means pinned to the latest entry,
+    // tracking new log output as it arrives (like a terminal's tail -f).
+    int scrollOffset = 0;
+
     auto renderer = Renderer(
         [&]
         {
+            auto entries = sink->snapshot();
+            int  total   = static_cast<int>(entries.size());
+            int  maxOffset = std::max(0, total - kVisibleLines);
+            scrollOffset    = std::clamp(scrollOffset, 0, maxOffset);
+
+            int end   = total - scrollOffset;
+            int start = std::max(0, end - kVisibleLines);
+
             Elements lines;
-            for (const auto& entry : sink->snapshot())
-                lines.push_back(text(entry.text) | color(LevelColor(entry.level)));
+            for (int i = start; i < end; ++i)
+                lines.push_back(text(entries[i].text) | color(LevelColor(entries[i].level)));
+
+            std::string status = scrollOffset == 0 ? "live — tracking newest entries"
+                                                     : "scrolled up " + std::to_string(scrollOffset) +
+                                                           " line(s) — press End to jump back to live";
 
             return vbox({
                        text("Terminal log panel") | bold,
-                       text("A background thread logs at every level every 400ms; sink keeps the last 12") | dim,
+                       text("A background thread logs at every level every 400ms; sink keeps the last " +
+                            std::to_string(kMaxEntries)) |
+                           dim,
+                       text("↑/↓, PgUp/PgDn, Home/End, or the mouse wheel to scroll") | dim,
                        separator(),
-                       vbox(std::move(lines)) | size(HEIGHT, EQUAL, 12) | border,
+                       vbox(std::move(lines)) | size(HEIGHT, EQUAL, kVisibleLines) | border,
+                       text(status) | dim,
                        separator(),
                        text("Esc to return to the menu") | dim,
                    }) |
@@ -171,6 +195,42 @@ void RunLesson08()
         renderer,
         [&](Event event)
         {
+            int total     = static_cast<int>(sink->snapshot().size());
+            int maxOffset = std::max(0, total - kVisibleLines);
+
+            bool wheelUp   = event.is_mouse() && event.mouse().button == Mouse::WheelUp;
+            bool wheelDown = event.is_mouse() && event.mouse().button == Mouse::WheelDown;
+
+            if (event == Event::ArrowUp || wheelUp)
+            {
+                scrollOffset = std::min(maxOffset, scrollOffset + 1);
+                return true;
+            }
+            if (event == Event::ArrowDown || wheelDown)
+            {
+                scrollOffset = std::max(0, scrollOffset - 1);
+                return true;
+            }
+            if (event == Event::PageUp)
+            {
+                scrollOffset = std::min(maxOffset, scrollOffset + kVisibleLines);
+                return true;
+            }
+            if (event == Event::PageDown)
+            {
+                scrollOffset = std::max(0, scrollOffset - kVisibleLines);
+                return true;
+            }
+            if (event == Event::Home)
+            {
+                scrollOffset = maxOffset;
+                return true;
+            }
+            if (event == Event::End)
+            {
+                scrollOffset = 0;
+                return true;
+            }
             if (event == Event::Escape)
             {
                 screen.Exit();

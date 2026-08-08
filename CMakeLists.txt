@@ -1,10 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
-project(prototype CXX)
+project(pf VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Only Debug packages are installed via Conan; map other configs to Debug so
 # imported targets resolve correctly and CMP0111 warnings are silenced.
+# NOTE: this (and the _DEBUG suffix in the imgui section below) is a local
+# development shortcut that must go before pf ships as a Conan package —
+# downstream consumers will build Release.
 set(CMAKE_MAP_IMPORTED_CONFIG_RELEASE Debug)
 set(CMAKE_MAP_IMPORTED_CONFIG_MINSIZEREL Debug)
 set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO Debug)
@@ -37,6 +40,9 @@ include(FetchContent)
 # under res/bindings and res/misc/cpp — CMakeDeps has no generated variable for
 # them, so we reach into the package folder directly. Only Debug is installed
 # (see CMAKE_MAP_IMPORTED_CONFIG_* above), so the _DEBUG suffix is fixed.
+#
+# These absolute package-folder include paths are why pf_ui_imgui is not yet
+# installable as part of the Conan package — see README "Packaging status".
 # ---------------------------------------------------------------------------
 set(IMGUI_BACKENDS_DIR ${imgui_PACKAGE_FOLDER_DEBUG}/res/bindings)
 set(IMGUI_MISC_CPP_DIR ${imgui_PACKAGE_FOLDER_DEBUG}/res/misc/cpp)
@@ -52,52 +58,99 @@ if(APPLE)
     target_compile_definitions(imgui_backends PUBLIC GL_SILENCE_DEPRECATION)
 endif()
 
-# ---------------------------------------------------------------------------
-# libs — implementation library for everything under include/ that isn't
-# purely template-based (dc::* ports and SettingsItem<T> stay header-only by
-# necessity; their non-template collaborators live here instead). Kept free
-# of Dear ImGui so it can be linked into targets (cli_server, tui, tui_imtui)
-# that must not pull in ImGui — see libs_imgui below for why that matters.
-# ---------------------------------------------------------------------------
-add_library(libs STATIC
-    libs/core/log.cpp
-    libs/core/log_level.cpp
-    libs/settings/command_registry.cpp
-    libs/settings/dirty_tracker.cpp
-    libs/settings/settings_registry.cpp
-    libs/calculator/calculator.cpp
+# ===========================================================================
+# pf — the platform library, split into components so a consumer links only
+# what it needs. A headless service takes pf::dc + pf::log and never pulls in
+# libxml2, the CLI stack, OpenGL or Dear ImGui.
+#
+# Public headers live under include/pf/<component>/ and everything in them is
+# in `namespace pf` (ports nested as `pf::dc`), so a downstream project's own
+# core/ or settings/ headers can never collide with the platform's.
+# ===========================================================================
+set(PF_PUBLIC_INCLUDE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
 )
-target_include_directories(libs PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+
+# --- pf::dc — sender/receiver ports. Header-only, zero third-party deps. ---
+add_library(pf_dc INTERFACE)
+add_library(pf::dc ALIAS pf_dc)
+target_include_directories(pf_dc INTERFACE ${PF_PUBLIC_INCLUDE})
+target_link_libraries(pf_dc INTERFACE Threads::Threads)
+target_compile_features(pf_dc INTERFACE cxx_std_17)
+
+# --- pf::log — spdlog wrapper + named loggers + LogLevel enum ---
+add_library(pf_log STATIC
+    src/pf/log/log.cpp
+    src/pf/log/log_level.cpp
 )
-target_link_libraries(libs PUBLIC
-    nlohmann_json::nlohmann_json
-    LibXml2::LibXml2
+add_library(pf::log ALIAS pf_log)
+target_include_directories(pf_log PUBLIC ${PF_PUBLIC_INCLUDE})
+target_link_libraries(pf_log PUBLIC
+    nlohmann_json::nlohmann_json   # LogLevel <-> string serialization
     spdlog::spdlog_header_only
     Threads::Threads
+)
+
+# --- pf::settings — registry, typed items, dirty tracking, XML persistence ---
+add_library(pf_settings STATIC
+    src/pf/settings/settings_registry.cpp
+    src/pf/settings/dirty_tracker.cpp
+)
+add_library(pf::settings ALIAS pf_settings)
+target_include_directories(pf_settings PUBLIC ${PF_PUBLIC_INCLUDE})
+target_link_libraries(pf_settings PUBLIC
+    nlohmann_json::nlohmann_json
+    LibXml2::LibXml2
+)
+
+# --- pf::cli — exposes the settings registry over daniele77/cli ---
+add_library(pf_cli STATIC
+    src/pf/cli/command_registry.cpp
+)
+add_library(pf::cli ALIAS pf_cli)
+target_include_directories(pf_cli PUBLIC ${PF_PUBLIC_INCLUDE})
+target_link_libraries(pf_cli PUBLIC
+    pf::settings
     cli::cli
 )
 
-# ---------------------------------------------------------------------------
-# libs_imgui — the subset of libs/ that depends on real Dear ImGui
-# (imgui::imgui). Split out from libs so that tui_imtui, which links its own
-# vendored/patched ImGui fork (see the ImTui section below), never ends up
-# with both ImGui builds' identically-named symbols in one binary.
-# ---------------------------------------------------------------------------
-add_library(libs_imgui STATIC
-    libs/core/imgui_app.cpp
-    libs/core/imgui_log_sink.cpp
-    libs/settings/settings_editor.cpp
+# --- pf::ui_imgui — window host, settings editor panel, ImGui log sink ---
+# Kept separate from every other component so targets that must not link Dear
+# ImGui (cli_server, tui, tui_imtui with its own patched ImGui fork) can't
+# accidentally pull it in.
+add_library(pf_ui_imgui STATIC
+    src/pf/ui/imgui_app.cpp
+    src/pf/ui/imgui_log_sink.cpp
+    src/pf/ui/settings_editor.cpp
 )
-target_link_libraries(libs_imgui PUBLIC
-    libs
+add_library(pf::ui_imgui ALIAS pf_ui_imgui)
+target_include_directories(pf_ui_imgui PUBLIC ${PF_PUBLIC_INCLUDE})
+target_link_libraries(pf_ui_imgui PUBLIC
+    pf::settings
+    pf::log
     imgui_backends
     glfw
     OpenGL::GL
 )
 if(APPLE)
-    target_compile_definitions(libs_imgui PUBLIC GL_SILENCE_DEPRECATION)
+    target_compile_definitions(pf_ui_imgui PUBLIC GL_SILENCE_DEPRECATION)
 endif()
+
+# NOTE: there is deliberately no pf::ui_ftxui yet — nothing FTXUI-side has been
+# extracted from the tutorial into reusable platform code. See TUTORIAL.md
+# lessons 06-08 for the candidates.
+
+# ===========================================================================
+# demo::config — example settings structs and port payloads used by the demo
+# apps, the tests and the tutorial. Explicitly NOT part of the pf package:
+# downstream projects write their own equivalents. Lives in `namespace demo`
+# so the app/platform boundary is visible at every call site.
+# ===========================================================================
+add_library(demo_config INTERFACE)
+add_library(demo::config ALIAS demo_config)
+target_include_directories(demo_config INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/examples/include)
+target_link_libraries(demo_config INTERFACE pf::settings pf::log)
 
 # ---------------------------------------------------------------------------
 # Main application — ImGui window + settings + sender/receiver demo
@@ -106,7 +159,9 @@ add_executable(app
     app/main.cpp
 )
 target_link_libraries(app PRIVATE
-    libs_imgui
+    pf::ui_imgui
+    pf::dc
+    demo::config
 )
 
 # ---------------------------------------------------------------------------
@@ -117,7 +172,8 @@ add_executable(cli_server
 )
 target_compile_definitions(cli_server PRIVATE ASIO_STANDALONE)
 target_link_libraries(cli_server PRIVATE
-    libs
+    pf::cli
+    demo::config
     asio::asio
 )
 if(WIN32)
@@ -139,10 +195,9 @@ target_link_libraries(tui PRIVATE
 
 # ---------------------------------------------------------------------------
 # ftxui_tutorial — progressive FTXUI lessons (DOM, components, events, custom
-# components) plus this project's own SettingsItem<T> / dc:: ports / Log
-# systems wired into a terminal UI. See tutorial/ftxui/TUTORIAL.md. Links
-# `libs` (not libs_imgui) for SettingsRegistry/Log/dc:: without pulling in
-# Dear ImGui.
+# components) plus this project's own pf::SettingsItem<T> / pf::dc:: ports /
+# pf::Log systems wired into a terminal UI. See tutorial/ftxui/TUTORIAL.md.
+# Links the non-ImGui pf components only.
 # ---------------------------------------------------------------------------
 add_executable(ftxui_tutorial
     tutorial/ftxui/main.cpp
@@ -159,7 +214,10 @@ add_executable(ftxui_tutorial
     tutorial/ftxui/examples/lesson_10_capstone_split.cpp
 )
 target_link_libraries(ftxui_tutorial PRIVATE
-    libs
+    pf::settings
+    pf::log
+    pf::dc
+    demo::config
     ftxui::screen
     ftxui::dom
     ftxui::component
@@ -180,6 +238,9 @@ target_link_libraries(ftxui_tutorial PRIVATE
 # pdcurses plus a hand-written <pdcurses.h>/<curses.h> shim, which proved
 # more trouble than the demo target is worth. Non-Windows platforms keep
 # tui_imtui as before.
+#
+# TODO: replace FetchContent with a local Conan recipe (recipes/imtui) so a
+# clean configure doesn't need network access.
 # ---------------------------------------------------------------------------
 if(NOT WIN32)
 FetchContent_Declare(imtui
@@ -213,7 +274,7 @@ get_filename_component(IMTUI_IMGUI_FORK_ROOT ${imtui_imgui_fork_SOURCE_DIR} DIRE
 
 # ImTui's forked/patched Dear ImGui core — kept entirely separate from the
 # imgui::imgui Conan package (different version, same symbol names) so it
-# must never be linked into the same binary as libs_imgui/imgui_backends.
+# must never be linked into the same binary as pf::ui_imgui/imgui_backends.
 add_library(imgui_for_imtui STATIC
     ${imtui_imgui_fork_SOURCE_DIR}/imgui.cpp
     ${imtui_imgui_fork_SOURCE_DIR}/imgui_draw.cpp
@@ -263,7 +324,10 @@ add_executable(tests
     test/test_log.cpp
 )
 target_link_libraries(tests PRIVATE
-    libs
+    pf::dc
+    pf::settings
+    pf::log
+    demo::config
     GTest::gtest
     GTest::gtest_main
 )

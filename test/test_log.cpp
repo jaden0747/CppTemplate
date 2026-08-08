@@ -2,7 +2,7 @@
 // test_log.cpp — Unit tests for Log module (log.hpp)
 // ---------------------------------------------------------------------------
 
-#include "core/log.hpp"
+#include <pf/log/log.hpp>
 
 #include <spdlog/sinks/ostream_sink.h>
 
@@ -146,21 +146,21 @@ TEST_F(LogTest, FmtFormattingWorks)
 
 TEST(LogSingleton, GetReturnsValidLogger)
 {
-    auto logger = Log::get("test_singleton_a");
+    auto logger = pf::Log::get("test_singleton_a");
     ASSERT_NE(logger, nullptr);
     EXPECT_EQ(logger->name(), "test_singleton_a");
 }
 
 TEST(LogSingleton, GetReturnsSameInstance)
 {
-    auto a = Log::get("test_singleton_same");
-    auto b = Log::get("test_singleton_same");
+    auto a = pf::Log::get("test_singleton_same");
+    auto b = pf::Log::get("test_singleton_same");
     EXPECT_EQ(a.get(), b.get());
 }
 
 TEST(LogSingleton, DifferentNamesReturnDifferentLoggers)
 {
-    auto a = Log::get("test_singleton_x");
-    auto b = Log::get("test_singleton_y");
+    auto a = pf::Log::get("test_singleton_x");
+    auto b = pf::Log::get("test_singleton_y");
     EXPECT_NE(a.get(), b.get());
 }
