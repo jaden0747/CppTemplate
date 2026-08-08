@@ -138,6 +138,34 @@ target_link_libraries(tui PRIVATE
 )
 
 # ---------------------------------------------------------------------------
+# ftxui_tutorial — progressive FTXUI lessons (DOM, components, events, custom
+# components) plus this project's own SettingsItem<T> / dc:: ports / Log
+# systems wired into a terminal UI. See tutorial/ftxui/TUTORIAL.md. Links
+# `libs` (not libs_imgui) for SettingsRegistry/Log/dc:: without pulling in
+# Dear ImGui.
+# ---------------------------------------------------------------------------
+add_executable(ftxui_tutorial
+    tutorial/ftxui/main.cpp
+    tutorial/ftxui/examples/lesson_01_hello_world.cpp
+    tutorial/ftxui/examples/lesson_02_layout_and_styling.cpp
+    tutorial/ftxui/examples/lesson_03_components.cpp
+    tutorial/ftxui/examples/lesson_04_events_and_focus.cpp
+    tutorial/ftxui/examples/lesson_05_custom_components.cpp
+    tutorial/ftxui/examples/lesson_06_dc_ports.cpp
+    tutorial/ftxui/examples/lesson_07_settings_panel.cpp
+    tutorial/ftxui/examples/lesson_08_log_panel.cpp
+    tutorial/ftxui/examples/capstone_panels.cpp
+    tutorial/ftxui/examples/lesson_09_capstone_tabs.cpp
+    tutorial/ftxui/examples/lesson_10_capstone_split.cpp
+)
+target_link_libraries(ftxui_tutorial PRIVATE
+    libs
+    ftxui::screen
+    ftxui::dom
+    ftxui::component
+)
+
+# ---------------------------------------------------------------------------
 # ImTui — Dear ImGui rendered to a terminal via (pd)curses. Not on
 # ConanCenter, so it's vendored with FetchContent. ImTui ships its own
 # patched Dear ImGui fork (ggerganov/imgui@imtui, pinned to the commit ImTui
@@ -151,6 +179,15 @@ target_link_libraries(tui PRIVATE
 FetchContent_Declare(imtui
     GIT_REPOSITORY https://github.com/ggerganov/imtui.git
     GIT_TAG        v1.0.5
+    # Upstream's ncurses backend tracks left/right mouse buttons but never
+    # reads BUTTON4/5_PRESSED (scroll wheel) into ImGui's IO, so wheel
+    # scrolling silently does nothing. Patch it in.
+    PATCH_COMMAND  git apply --whitespace=nowarn ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imtui_patches/0001-ncurses-mouse-wheel-scroll.patch
+    # GIT_TAG is a fixed tag, so there's nothing to update — but without
+    # this, every reconfigure re-runs the git update step, which bumps the
+    # step's stamp and forces PATCH_COMMAND to re-run against the
+    # already-patched tree (git apply then fails: "patch does not apply").
+    UPDATE_DISCONNECTED TRUE
 )
 FetchContent_GetProperties(imtui)
 if(NOT imtui_POPULATED)

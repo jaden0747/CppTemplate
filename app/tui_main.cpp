@@ -8,9 +8,12 @@
 // Copyright 2020 Arthur Sonzogni. All rights reserved.
 // Use of this source code is governed by the MIT license that can be found in
 // the LICENSE file.
+#include <atomic>      // for atomic
+#include <chrono>      // for milliseconds, sleep_for
 #include <functional>  // for function
 #include <memory>      // for shared_ptr, allocator, __shared_ptr_access
 #include <string>      // for string, basic_string
+#include <thread>      // for thread
 #include <vector>      // for vector
 
 #include "ftxui/component/captured_mouse.hpp"  // for ftxui
@@ -115,8 +118,27 @@ int main() {
       button,
   });
 
+  // -- Loop counter -----------------------------------------------------------
+  // Render at a fixed 30 fps and bump the counter exactly 30 times per second.
+  constexpr int kFps = 30;
+  constexpr auto kFrameDuration = std::chrono::milliseconds(1000 / kFps);
+  std::atomic<bool> running{true};
+  int loop_count = 0;
+
+  // A timer thread posts a custom event every frame; the main loop wakes up on
+  // each event, re-renders, and increments the counter.
+  std::thread timer_thread([&] {
+    while (running.load()) {
+      screen.PostEvent(Event::Custom);
+      std::this_thread::sleep_for(kFrameDuration);
+    }
+  });
+
   auto component = Renderer(layout, [&] {
+    ++loop_count;
     return vbox({
+               text("Loop count: " + std::to_string(loop_count)) | bold,
+               separator(),
                menu->Render(),
                separator(),
                toggle->Render(),
@@ -135,6 +157,9 @@ int main() {
   });
 
   screen.Loop(component);
+
+  running.store(false);
+  timer_thread.join();
 
   return 0;
 }

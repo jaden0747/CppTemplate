@@ -1,0 +1,23 @@
+--- a/src/imtui-impl-ncurses.cpp
++++ b/src/imtui-impl-ncurses.cpp
+@@ -193,6 +193,7 @@
+
+     ImGui::GetIO().KeyCtrl = false;
+     ImGui::GetIO().KeyShift = false;
++    ImGui::GetIO().MouseWheel = 0.0f;
+
+     while (true) {
+         int c = wgetch(stdscr);
+@@ -213,6 +214,12 @@
+                 if ((mstate & 0x000f) == 0x0001) lbut = 0;
+                 if ((mstate & 0xf000) == 0x2000) rbut = 1;
+                 if ((mstate & 0xf000) == 0x1000) rbut = 0;
++#ifdef BUTTON4_PRESSED
++                if (mstate & BUTTON4_PRESSED) ImGui::GetIO().MouseWheel += 1.0f;
++#endif
++#ifdef BUTTON5_PRESSED
++                if (mstate & BUTTON5_PRESSED) ImGui::GetIO().MouseWheel -= 1.0f;
++#endif
+                 //printf("mstate = 0x%016lx\n", mstate);
+                 ImGui::GetIO().KeyCtrl |= ((mstate & 0x0F000000) == 0x01000000);
+             }
