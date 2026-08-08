@@ -166,16 +166,22 @@ target_link_libraries(ftxui_tutorial PRIVATE
 )
 
 # ---------------------------------------------------------------------------
-# ImTui — Dear ImGui rendered to a terminal via (pd)curses. Not on
-# ConanCenter, so it's vendored with FetchContent. ImTui ships its own
-# patched Dear ImGui fork (ggerganov/imgui@imtui, pinned to the commit ImTui
-# v1.0.5's submodule points at) and its own CMakeLists.txt assumes a
-# MinGW/Unix toolchain (Windows handling is marked "todo" upstream), so
-# rather than add_subdirectory()'ing it, its handful of source files are
-# compiled directly here instead — the same approach imgui_backends above
-# takes with the Conan imgui package's resource sources. Populate-only (no
+# ImTui — Dear ImGui rendered to a terminal via ncurses. Not on ConanCenter,
+# so it's vendored with FetchContent. ImTui ships its own patched Dear ImGui
+# fork (ggerganov/imgui@imtui, pinned to the commit ImTui v1.0.5's submodule
+# points at) and its own CMakeLists.txt assumes a MinGW/Unix toolchain
+# (Windows handling is marked "todo" upstream), so rather than
+# add_subdirectory()'ing it, its handful of source files are compiled
+# directly here instead — the same approach imgui_backends above takes with
+# the Conan imgui package's resource sources. Populate-only (no
 # add_subdirectory) so neither repo's own build logic runs.
+#
+# Dropped entirely on Windows: ImTui's ncurses backend there depends on
+# pdcurses plus a hand-written <pdcurses.h>/<curses.h> shim, which proved
+# more trouble than the demo target is worth. Non-Windows platforms keep
+# tui_imtui as before.
 # ---------------------------------------------------------------------------
+if(NOT WIN32)
 FetchContent_Declare(imtui
     GIT_REPOSITORY https://github.com/ggerganov/imtui.git
     GIT_TAG        v1.0.5
@@ -227,22 +233,12 @@ add_library(imtui_ncurses STATIC
     ${imtui_SOURCE_DIR}/src/imtui-impl-ncurses.cpp
 )
 target_link_libraries(imtui_ncurses PUBLIC imtui_core)
-if(WIN32)
-    # ImTui's Windows branch (src/imtui-impl-ncurses.cpp) includes
-    # <pdcurses.h>, but ConanCenter's pdcurses package only ships the
-    # conventional <curses.h>. This one-line shim bridges the two.
-    find_package(pdcurses REQUIRED CONFIG)
-    target_include_directories(imtui_ncurses PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/pdcurses_shim)
-    target_link_libraries(imtui_ncurses PUBLIC pdcurses::pdcurses)
-else()
-    # Conan's ncurses package overrides find_package(Curses) (Module mode)
-    # with its own generated shim, same as how LibXml2 is resolved above, so
-    # this resolves to the Conan-installed ncurses rather than a
-    # system-installed one.
-    find_package(Curses REQUIRED)
-    target_include_directories(imtui_ncurses PRIVATE ${CURSES_INCLUDE_DIR})
-    target_link_libraries(imtui_ncurses PUBLIC ${CURSES_LIBRARIES})
-endif()
+# Conan's ncurses package overrides find_package(Curses) (Module mode) with
+# its own generated shim, same as how LibXml2 is resolved above, so this
+# resolves to the Conan-installed ncurses rather than a system-installed one.
+find_package(Curses REQUIRED)
+target_include_directories(imtui_ncurses PRIVATE ${CURSES_INCLUDE_DIR})
+target_link_libraries(imtui_ncurses PUBLIC ${CURSES_LIBRARIES})
 
 # tui_imtui — ImTui's own ncurses demo (see app/tui_imtui_main.cpp), the
 # classic Dear ImGui demo window ported to text, demonstrating what the
@@ -254,6 +250,7 @@ add_executable(tui_imtui
 target_link_libraries(tui_imtui PRIVATE
     imtui_ncurses
 )
+endif() # NOT WIN32
 
 # ---------------------------------------------------------------------------
 # Tests

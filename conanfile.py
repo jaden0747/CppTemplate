@@ -24,11 +24,10 @@ class CppTemplateConan(ConanFile):
 
         # ImTui itself isn't on ConanCenter (vendored via CMake FetchContent
         # in CMakeLists.txt), but its ncurses backend needs a curses
-        # implementation: pdcurses on Windows (its native wincon backend
-        # works with MSVC), ncurses everywhere else.
-        if self.settings.os == "Windows":
-            self.requires("pdcurses/3.9")
-        else:
+        # implementation. The tui_imtui target is dropped on Windows (see
+        # CMakeLists.txt), so only pull ncurses in for the platforms that
+        # still build it.
+        if self.settings.os != "Windows":
             self.requires("ncurses/6.5")
 
     def layout(self):
